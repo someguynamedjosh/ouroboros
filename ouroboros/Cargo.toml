@@ -1,0 +1,7 @@
+[package]
+name = "ouroboros"
+version = "0.1.0"
+authors = ["Joshua Maros <joshua-maros@github.com>"]
+edition = "2018"
+
+[dependencies]
