@@ -1,17 +1,17 @@
 use ouroboros::self_referencing;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct RefHolder<'a> {
     held: &'a (),
 }
 
-// #[self_referencing]
-// pub struct Test<'a> {
-//     data: Box<i32>,
-//     #[tail]
-//     external: &'a i32,
-//     ptr2: &'this i32,
-// }
+#[self_referencing]
+pub struct Test<'a> {
+    data: Box<i32>,
+    #[tail]
+    external: &'a i32,
+    ptr2: &'this i32,
+}
 
 struct Manual {
     data: Box<()>,
@@ -47,11 +47,15 @@ fn use_ref2<'a, T>(manual: &'a Manual, function: impl for<'this> FnOnce(&'a &'th
 }
 
 fn main() {
-    // let external_int = 123;
-    // let test: Test = Test::new(Box::new(321), |_data| &external_int, |data| data);
+    let external_int = 123;
+    let test: Test = Test::new(Box::new(321), |_data| &external_int, |data| data);
+    let reffed_data = test.use_ptr2(|data| *data);
+    println!("{:?}", reffed_data);
+    drop(test);
 
-    let manual = make_manual(Box::new(()), |data| RefHolder { held: data }, |data| data);
-    let externally_stored: &() = use_ref2(&manual, |ref2| *ref2);
-    println!("{:?}", externally_stored);
-    drop(manual);
+    // let manual = make_manual(Box::new(()), |data| RefHolder { held: data }, |data| data);
+    // let externally_stored: &RefHolder<'_> = use_reff(&manual, |reff| reff);
+    // let externally_stored = externally_stored.clone();
+    // println!("{:?}", externally_stored);
+    // drop(manual);
 }

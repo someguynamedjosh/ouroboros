@@ -133,7 +133,8 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 code.push(quote! {
                     let #ref_name = unsafe { ::ouroboros::macro_help::stable_deref_and_strip_lifetime(&#field_name) };
                 });
-                field_builder_params.push(quote! { &'this <#field_type as ::std::ops::Deref>::Target });
+                field_builder_params
+                    .push(quote! { &'this <#field_type as ::std::ops::Deref>::Target });
                 field_builder_args.push(quote! { #ref_name });
             }
         }
@@ -144,22 +145,38 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {
             pub fn new(#(#params),*) -> Self {
                 #(#code)*
-                Self(#internal_struct_name { #(#field_names),* })
+                Self{ evil_secret_data_bad_bad_not_good__: #internal_struct_name { #(#field_names),* }}
             }
         }
     };
 
-    // Getter generation
-    let mut getters = Vec::new();
+    // fn use_* generation
+    let mut users = Vec::new();
     for field in &field_info {
         let field_name = &field.name;
         let field_type = &field.typ;
-        let getter_name = format_ident!("borrow_{}", &field.name);
-        getters.push(quote! {
-            pub fn #getter_name (&self) -> &#field_type {
-                &self.evil_secret_data_bad_bad_not_good__. #field_name
-            }
-        });
+        let user_name = format_ident!("use_{}", &field.name);
+        // If the field is not a tail, we need to serve up the same kind of reference that other
+        // members in the struct may have borrowed to ensure safety.
+        if field.is_tail {
+            users.push(quote! {
+                pub fn #user_name <'outer_borrow, ReturnType>(
+                    &'outer_borrow self,
+                    user: impl for<'this> FnOnce(&'outer_borrow #field_type) -> ReturnType,
+                ) -> ReturnType {
+                    user(&self.evil_secret_data_bad_bad_not_good__. #field_name)
+                }
+            });
+        } else {
+            users.push(quote! {
+                pub fn #user_name <'outer_borrow, ReturnType>(
+                    &'outer_borrow self,
+                    user: impl for<'this> FnOnce(&'outer_borrow <#field_type as ::std::ops::Deref>::Target) -> ReturnType,
+                ) -> ReturnType {
+                    user(&*self.evil_secret_data_bad_bad_not_good__. #field_name)
+                }
+            });
+        }
     }
 
     let final_data = TokenStream::from(quote! {
@@ -167,7 +184,7 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #wrapper_struct_def
         impl #generics #wrapper_struct_name #generics {
             #constructor_def
-            #(#getters)*
+            #(#users)*
         }
     });
     // eprintln!("{:#?}", final_data);
