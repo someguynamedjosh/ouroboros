@@ -1,12 +1,15 @@
 use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use proc_macro2::{Span, TokenTree};
+use proc_macro2::{Group, Span, TokenTree};
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{parenthesized, Expr, Ident, Token};
-use syn::{Field, Fields, FieldsUnnamed, GenericParam, ItemStruct, Type, Visibility};
+use syn::token::Comma;
+use syn::{
+    parenthesized, Expr, Field, Fields, FieldsUnnamed, GenericParam, Generics, Ident, ItemStruct,
+    Lifetime, LifetimeDef, Token, Type, TypeParam, TypeParamBound, Visibility,
+};
 
 struct StructFieldInfo {
     name: Ident,
@@ -16,21 +19,35 @@ struct StructFieldInfo {
     is_tail: bool,
 }
 
+fn replace_this_with_static(input: TokenStream2) -> TokenStream2 {
+    input
+        .into_iter()
+        .map(|token| match &token {
+            TokenTree::Ident(ident) => {
+                if ident.to_string() == "this" {
+                    TokenTree::Ident(format_ident!("static"))
+                } else {
+                    token
+                }
+            }
+            TokenTree::Group(group) => TokenTree::Group(Group::new(
+                group.delimiter(),
+                replace_this_with_static(group.stream()),
+            )),
+            _ => token,
+        })
+        .collect()
+}
+
 #[proc_macro_attribute]
 pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
 
-    // Internal data struct generation & metadata gathering.
-    let mut internal_struct_def = original_struct_def.clone();
-    internal_struct_def.vis = Visibility::Inherited;
-    internal_struct_def.ident = format_ident!("{}OuroborosInternalData", internal_struct_def.ident);
-    // Add the 'this lifetime (which will just be 'static.)
-    internal_struct_def
-        .generics
-        .params
-        .insert(0, GenericParam::Lifetime(syn::parse_quote! { 'this }));
+    // Actual data struct generation & metadata gathering.
+    let mut actual_struct_def = original_struct_def.clone();
+    actual_struct_def.vis = Visibility::Inherited;
     let mut field_info = Vec::new();
-    match &mut internal_struct_def.fields {
+    match &mut actual_struct_def.fields {
         Fields::Named(fields) => {
             for field in &mut fields.named {
                 let mut is_tail = false;
@@ -77,7 +94,7 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Reverse the order of all members. We ensure that items in the struct are only dependent
     // on references to items above them. Rust drops items in a struct in forward declaration order.
     // This would cause parents being dropped before children, necessitating the reversal.
-    match &mut internal_struct_def.fields {
+    match &mut actual_struct_def.fields {
         Fields::Named(fields) => {
             let reversed = fields.named.iter().rev().cloned().collect();
             fields.named = reversed;
@@ -85,32 +102,31 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         Fields::Unnamed(_fields) => unimplemented!("Tuple structs are not supported yet."),
         Fields::Unit => panic!("Unit structs cannot be self-referential."),
     }
+    // Finally, replace the fake 'this lifetime with 'static.
+    let actual_struct_def = replace_this_with_static(quote! { #actual_struct_def });
 
-    // Wrapper struct generation.
-    let wrapper_struct_def = {
-        let attrs = &original_struct_def.attrs;
-        let visibility = &original_struct_def.vis;
-        let ident = &original_struct_def.ident;
-        let generics = &original_struct_def.generics;
-        let internal_ident = &internal_struct_def.ident;
-        let mut internal_generics = generics.clone();
-        if internal_generics.params.len() > 0 {
-            internal_generics
-                .params
-                .insert(0, GenericParam::Lifetime(syn::parse_quote! {'static}));
-        } else {
-            internal_generics = syn::parse_quote! { <'static> };
+    // Generic stuff
+    let generic_producers = original_struct_def.generics.clone();
+    let generic_consumers = {
+        let mut arguments = Vec::new();
+        for generic in original_struct_def.generics.params.clone() {
+            match generic {
+                GenericParam::Type(typ) => {
+                    let ident = &typ.ident;
+                    arguments.push(quote! { #ident });
+                }
+                GenericParam::Lifetime(lt) => {
+                    let lifetime = &lt.lifetime;
+                    arguments.push(quote! { #lifetime });
+                },
+                GenericParam::Const(_) => unimplemented!(),
+            }
         }
-        quote! {
-            #(#attrs)*
-            #visibility struct #ident #generics { evil_secret_data_bad_bad_not_good__: #internal_ident #internal_generics }
-        }
+        arguments
     };
 
     // Constructor generation.
-    let generics = &original_struct_def.generics;
-    let wrapper_struct_name = &original_struct_def.ident;
-    let internal_struct_name = &internal_struct_def.ident;
+    let struct_name = &original_struct_def.ident;
     let constructor_def: TokenStream2 = {
         let mut params: Vec<TokenStream2> = Vec::new();
         let mut code: Vec<TokenStream2> = Vec::new();
@@ -145,7 +161,7 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {
             pub fn new(#(#params),*) -> Self {
                 #(#code)*
-                Self{ evil_secret_data_bad_bad_not_good__: #internal_struct_name { #(#field_names),* }}
+                Self{ #(#field_names),* }
             }
         }
     };
@@ -164,7 +180,7 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     &'outer_borrow self,
                     user: impl for<'this> FnOnce(&'outer_borrow #field_type) -> ReturnType,
                 ) -> ReturnType {
-                    user(&self.evil_secret_data_bad_bad_not_good__. #field_name)
+                    user(&self. #field_name)
                 }
             });
         } else {
@@ -173,18 +189,72 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     &'outer_borrow self,
                     user: impl for<'this> FnOnce(&'outer_borrow <#field_type as ::std::ops::Deref>::Target) -> ReturnType,
                 ) -> ReturnType {
-                    user(&*self.evil_secret_data_bad_bad_not_good__. #field_name)
+                    user(&*self. #field_name)
                 }
             });
         }
     }
 
+    // use_all_fields generation
+    let (all_fields_struct, use_all_fields_fn) = {
+        let mut fields = Vec::new();
+        let mut field_assignments = Vec::new();
+        // I don't think the reverse is necessary but it does make the expanded code more uniform.
+        for field in field_info.iter().rev() {
+            let field_name = &field.name;
+            let field_type = &field.typ;
+            if field.is_tail {
+                fields.push(quote! { pub #field_name: &'outer_borrow #field_type });
+                field_assignments.push(quote! { #field_name: &self.#field_name });
+            } else {
+                fields.push(quote! { pub #field_name: &'outer_borrow <#field_type as ::std::ops::Deref>::Target });
+                field_assignments.push(quote! { #field_name: &*self.#field_name });
+            }
+        }
+        let all_fields_struct = if generic_producers.params.len() == 0 {
+            quote! {
+                struct BorrowedFields<'outer_borrow, 'this> { #(#fields),* }
+            }
+        } else {
+            let mut new_generic_producers = generic_producers.clone();
+            new_generic_producers
+                .params
+                .insert(0, syn::parse_quote! { 'this });
+            new_generic_producers
+                .params
+                .insert(0, syn::parse_quote! { 'outer_borrow });
+            quote! {
+                struct BorrowedFields #new_generic_producers { #(#fields),* }
+            }
+        };
+        let borrowed_fields_type = if generic_consumers.len() == 0 {
+            quote! { BorrowedFields<'outer_borrow, 'this> }
+        } else {
+            let mut new_generic_consumers = generic_consumers.clone();
+            new_generic_consumers.insert(0, quote! { 'this });
+            new_generic_consumers.insert(0, quote! { 'outer_borrow });
+            quote! { BorrowedFields <#(#new_generic_consumers),*> }
+        };
+        let use_all_fields_fn = quote! {
+            pub fn use_all_fields <'outer_borrow, ReturnType>(
+                &'outer_borrow self,
+                user: impl for <'this> FnOnce(#borrowed_fields_type) -> ReturnType
+            ) -> ReturnType {
+                user(BorrowedFields {
+                    #(#field_assignments),*
+                })
+            }
+        };
+        (all_fields_struct, use_all_fields_fn)
+    };
+
     let final_data = TokenStream::from(quote! {
-        #internal_struct_def
-        #wrapper_struct_def
-        impl #generics #wrapper_struct_name #generics {
+        #actual_struct_def
+        pub #all_fields_struct
+        impl #generic_producers #struct_name <#(#generic_consumers),*> {
             #constructor_def
             #(#users)*
+            #use_all_fields_fn
         }
     });
     // eprintln!("{:#?}", final_data);
