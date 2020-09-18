@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
-    "ouroboros"
-    "ouroboros_macro"
+    "examples",
+    "ouroboros",
+    "ouroboros_macro",
 ]
