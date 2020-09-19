@@ -235,10 +235,20 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         arguments
     };
 
-    // Constructor generation.
-    let constructor_def: TokenStream2 = {
+    // Constructor and builder generation.
+    let builder_struct_name = format_ident!("{}Builder", struct_name);
+    let (builder_def, constructor_def) = {
         let mut params: Vec<TokenStream2> = Vec::new();
         let mut code: Vec<TokenStream2> = Vec::new();
+        let mut builder_struct_generic_producers: Vec<_> = generic_producers
+            .params
+            .iter()
+            .map(|param| quote! { #param })
+            .collect();
+        let mut builder_struct_generic_consumers: Vec<_> = generic_consumers.clone();
+        let mut builder_struct_members = Vec::new();
+        let mut builder_struct_member_names = Vec::new();
+
         for field in &field_info {
             let field_name = &field.name;
             let field_type = &field.typ;
@@ -260,14 +270,24 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 }
                 let builder_name = format_ident!("{}_builder", field_name);
+                let bound = quote! { for<'this> FnOnce(#(#field_builder_params),*) -> #field_type };
                 params.push(quote! {
-                    #builder_name : impl for<'this> FnOnce(#(#field_builder_params),*) -> #field_type
+                    #builder_name : impl #bound
                 });
-                code.push(quote! { let #field_name = #builder_name (#(#field_builder_args),*); })
+                code.push(quote! { let #field_name = #builder_name (#(#field_builder_args),*); });
+
+                let generic_type_name =
+                    format_ident!("{}Builder", field_name.to_string().to_class_case());
+                builder_struct_generic_producers.push(quote! { #generic_type_name: #bound });
+                builder_struct_generic_consumers.push(quote! { #generic_type_name });
+                builder_struct_members.push(quote! { #builder_name: #generic_type_name });
+                builder_struct_member_names.push(quote! { #builder_name });
             } else {
                 // If it doesn't need to borrow anything, we can just copy it straight in to the
                 // struct without any fancy builder nonsense.
                 params.push(quote!( #field_name : #field_type ));
+                builder_struct_members.push(quote! { #field_name: #field_type });
+                builder_struct_member_names.push(quote! { #field_name });
             }
 
             if field.field_type == FieldType::Borrowed {
@@ -285,12 +305,25 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         for field in &field_info {
             field_names.push(field.name.clone());
         }
-        quote! {
+        let constructor_def = quote! {
             pub fn new(#(#params),*) -> Self {
                 #(#code)*
                 Self{ #(#field_names),* }
             }
-        }
+        };
+        let builder_def = quote! {
+            pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
+                #(pub #builder_struct_members),*
+            }
+            impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
+                pub fn build(self) -> #struct_name <#(#generic_consumers),*> {
+                    #struct_name::new(
+                        #(self.#builder_struct_member_names),*
+                    )
+                }
+            }
+        };
+        (builder_def, constructor_def)
     };
 
     // fn use_* generation
@@ -383,6 +416,7 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         mod #mod_name {
             #actual_struct_def
             pub #all_fields_struct
+            #builder_def
             impl #generic_producers #struct_name <#(#generic_consumers),*> {
                 #constructor_def
                 #(#users)*
@@ -390,6 +424,7 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
         #visibility use #mod_name :: #struct_name;
+        #visibility use #mod_name :: #builder_struct_name;
     });
     // eprintln!("{:#?}", final_data);
     final_data

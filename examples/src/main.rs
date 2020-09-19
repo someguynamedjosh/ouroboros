@@ -26,4 +26,14 @@ fn main() {
     let reffed_data = test.use_ptr2(|data| *data);
     println!("{:?}", reffed_data);
     drop(test);
+
+    let external_int = 123;
+    let test = TestBuilder {
+        data: Box::new(321),
+        external: &external_int,
+        ptr2_builder: |data| data,
+    }.build();
+    let reffed_data = test.use_ptr2(|data| *data);
+    println!("{:?}", reffed_data);
+    drop(test);
 }
