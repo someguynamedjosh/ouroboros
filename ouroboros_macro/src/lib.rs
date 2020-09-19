@@ -39,6 +39,70 @@ struct StructFieldInfo {
     borrows: Vec<BorrowRequest>,
 }
 
+impl StructFieldInfo {
+    fn builder_name(&self) -> Ident {
+        format_ident!("{}_builder", self.name)
+    }
+
+    fn illegal_ref_name(&self) -> Ident {
+        format_ident!("{}_illegal_static_reference", self.name)
+    }
+
+    /// Returns code which takes a variable with the same name and type as this field and turns it
+    /// into a static reference to its dereffed contents. For example, suppose a field
+    /// `test: Box<i32>`. This method would generate code that looks like:
+    /// ```rust
+    /// // Variable name taken from self.illegal_ref_name()
+    /// let test_illegal_static_reference = unsafe {
+    ///     ::ouroboros::macro_help::stable_deref_and_strip_lifetime(&test)
+    /// };
+    /// ```
+    fn make_illegal_static_reference(&self) -> TokenStream2 {
+        let field_name = &self.name;
+        let ref_name = self.illegal_ref_name();
+        quote! {
+            let #ref_name = unsafe {
+                ::ouroboros::macro_help::stable_deref_and_strip_lifetime(&#field_name)
+            };
+        }
+    }
+}
+
+enum ArgType {
+    /// Used when the initial value of a field can be passed directly into the constructor.
+    Plain(TokenStream2),
+    /// Used when a field requires self references and thus requires something that implements
+    /// a builder function trait instead of a simple plain type.
+    TraitBound(TokenStream2),
+}
+
+/// Returns a trait bound if `for_field` refers to any other fields, and a plain type if not. This
+/// is the type used in the constructor to initialize the value of `for_field`.
+fn make_constructor_arg_type(
+    for_field: &StructFieldInfo,
+    other_fields: &[StructFieldInfo],
+) -> ArgType {
+    let field_type = &for_field.typ;
+    if for_field.borrows.len() == 0 {
+        ArgType::Plain(quote! { #field_type })
+    } else {
+        let mut field_builder_params = Vec::new();
+        for borrow in &for_field.borrows {
+            if borrow.mutable {
+                unimplemented!();
+            } else {
+                let field = &other_fields[borrow.index];
+                let field_type = &field.typ;
+                field_builder_params.push(quote! {
+                    &'this <#field_type as ::std::ops::Deref>::Target
+                });
+            }
+        }
+        let bound = quote! { for<'this> FnOnce(#(#field_builder_params),*) -> #field_type };
+        ArgType::TraitBound(bound)
+    }
+}
+
 fn replace_this_with_static(input: TokenStream2) -> TokenStream2 {
     input
         .into_iter()
@@ -142,14 +206,10 @@ fn handle_borrows_attr(
     }
 }
 
-#[proc_macro_attribute]
-pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
-    let struct_name = &original_struct_def.ident;
-    let mod_name = format_ident!("ouroboros_impl_{}", struct_name.to_string().to_snake_case());
-    let visibility = &original_struct_def.vis;
-
-    // Actual data struct generation & metadata gathering.
+/// Creates the struct that will actually store the data. This involves properly organizing the
+/// fields, collecting metadata about them, reversing the order everything is stored in, and
+/// converting any uses of 'this to 'static.
+fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<StructFieldInfo>) {
     let mut actual_struct_def = original_struct_def.clone();
     actual_struct_def.vis = syn::parse_quote! { pub };
     let mut field_info = Vec::new();
@@ -215,120 +275,112 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Finally, replace the fake 'this lifetime with 'static.
     let actual_struct_def = replace_this_with_static(quote! { #actual_struct_def });
 
-    // Generic stuff
-    let generic_producers = original_struct_def.generics.clone();
-    let generic_consumers = {
-        let mut arguments = Vec::new();
-        for generic in original_struct_def.generics.params.clone() {
-            match generic {
-                GenericParam::Type(typ) => {
-                    let ident = &typ.ident;
-                    arguments.push(quote! { #ident });
-                }
-                GenericParam::Lifetime(lt) => {
-                    let lifetime = &lt.lifetime;
-                    arguments.push(quote! { #lifetime });
-                }
-                GenericParam::Const(_) => unimplemented!(),
+    (actual_struct_def, field_info)
+}
+
+// Takes the generics parameters from the original struct and turns them into arguments.
+fn make_generic_arguments(generic_params: &Generics) -> Vec<TokenStream2> {
+    let mut arguments = Vec::new();
+    for generic in generic_params.params.clone() {
+        match generic {
+            GenericParam::Type(typ) => {
+                let ident = &typ.ident;
+                arguments.push(quote! { #ident });
             }
+            GenericParam::Lifetime(lt) => {
+                let lifetime = &lt.lifetime;
+                arguments.push(quote! { #lifetime });
+            }
+            GenericParam::Const(_) => unimplemented!(),
         }
-        arguments
+    }
+    arguments
+}
+
+fn create_builder_and_constructor(
+    struct_name: &Ident,
+    builder_struct_name: &Ident,
+    generic_params: &Generics,
+    generic_args: &Vec<TokenStream2>,
+    field_info: &[StructFieldInfo],
+) -> (TokenStream2, TokenStream2) {
+    let mut code: Vec<TokenStream2> = Vec::new();
+    let mut params: Vec<TokenStream2> = Vec::new();
+    let mut builder_struct_generic_producers: Vec<_> = generic_params
+        .params
+        .iter()
+        .map(|param| quote! { #param })
+        .collect();
+    let mut builder_struct_generic_consumers: Vec<_> = generic_args.clone();
+    let mut builder_struct_members = Vec::new();
+    let mut builder_struct_member_names = Vec::new();
+
+    for field in field_info {
+        let field_name = &field.name;
+
+        let arg_type = make_constructor_arg_type(&field, &field_info[..]);
+        if let ArgType::Plain(plain_type) = arg_type {
+            // No fancy builder function, we can just move the value directly into the struct.
+            params.push(quote! { #field_name: #plain_type });
+            builder_struct_members.push(quote! { #field_name: #plain_type });
+            builder_struct_member_names.push(quote! { #field_name });
+        } else if let ArgType::TraitBound(bound_type) = arg_type {
+            // Trait bounds are much trickier. We need a special syntax to accept them in the
+            // contructor, and generic parameters need to be added to the builder struct to make
+            // it work.
+            let builder_name = field.builder_name();
+            params.push(quote! { #builder_name : impl #bound_type });
+            // Ok so hear me out basically without this thing here my IDE thinks the rest of the
+            // code is a string and it all turns green.
+            {}
+            let mut builder_args = Vec::new();
+            for borrow in &field.borrows {
+                builder_args.push(format_ident!(
+                    "{}_illegal_static_reference",
+                    field_info[borrow.index].name
+                ));
+            }
+            code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
+            let generic_type_name =
+                format_ident!("{}Builder_", field_name.to_string().to_class_case());
+
+            builder_struct_generic_producers.push(quote! { #generic_type_name: #bound_type });
+            builder_struct_generic_consumers.push(quote! { #generic_type_name });
+            builder_struct_members.push(quote! { #builder_name: #generic_type_name });
+            builder_struct_member_names.push(quote! { #builder_name });
+        }
+
+        if field.field_type == FieldType::Borrowed {
+            code.push(field.make_illegal_static_reference());
+        } else if field.field_type == FieldType::BorrowedMut {
+            unimplemented!();
+        }
+    }
+    let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
+    let constructor_def = quote! {
+        pub fn new(#(#params),*) -> Self {
+            #(#code)*
+            Self{ #(#field_names),* }
+        }
     };
-
-    // Constructor and builder generation.
-    let builder_struct_name = format_ident!("{}Builder", struct_name);
-    let (builder_def, constructor_def) = {
-        let mut params: Vec<TokenStream2> = Vec::new();
-        let mut code: Vec<TokenStream2> = Vec::new();
-        let mut builder_struct_generic_producers: Vec<_> = generic_producers
-            .params
-            .iter()
-            .map(|param| quote! { #param })
-            .collect();
-        let mut builder_struct_generic_consumers: Vec<_> = generic_consumers.clone();
-        let mut builder_struct_members = Vec::new();
-        let mut builder_struct_member_names = Vec::new();
-
-        for field in &field_info {
-            let field_name = &field.name;
-            let field_type = &field.typ;
-
-            if field.borrows.len() > 0 {
-                let mut field_builder_params = Vec::new();
-                let mut field_builder_args = Vec::new();
-                for borrow in &field.borrows {
-                    if borrow.mutable {
-                        unimplemented!();
-                    } else {
-                        let field = &field_info[borrow.index];
-                        let field_type = &field.typ;
-                        field_builder_params.push(quote! {
-                            &'this <#field_type as ::std::ops::Deref>::Target
-                        });
-                        let ref_name = format_ident!("{}_illegal_static_reference", field.name);
-                        field_builder_args.push(ref_name);
-                    }
-                }
-                let builder_name = format_ident!("{}_builder", field_name);
-                let bound = quote! { for<'this> FnOnce(#(#field_builder_params),*) -> #field_type };
-                params.push(quote! {
-                    #builder_name : impl #bound
-                });
-                code.push(quote! { let #field_name = #builder_name (#(#field_builder_args),*); });
-
-                let generic_type_name =
-                    format_ident!("{}Builder", field_name.to_string().to_class_case());
-                builder_struct_generic_producers.push(quote! { #generic_type_name: #bound });
-                builder_struct_generic_consumers.push(quote! { #generic_type_name });
-                builder_struct_members.push(quote! { #builder_name: #generic_type_name });
-                builder_struct_member_names.push(quote! { #builder_name });
-            } else {
-                // If it doesn't need to borrow anything, we can just copy it straight in to the
-                // struct without any fancy builder nonsense.
-                params.push(quote!( #field_name : #field_type ));
-                builder_struct_members.push(quote! { #field_name: #field_type });
-                builder_struct_member_names.push(quote! { #field_name });
-            }
-
-            if field.field_type == FieldType::Borrowed {
-                let ref_name = format_ident!("{}_illegal_static_reference", field_name);
-                code.push(quote! {
-                    let #ref_name = unsafe {
-                        ::ouroboros::macro_help::stable_deref_and_strip_lifetime(&#field_name)
-                    };
-                });
-            } else if field.field_type == FieldType::BorrowedMut {
-                unimplemented!();
+    let builder_def = quote! {
+        pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
+            #(pub #builder_struct_members),*
+        }
+        impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
+            pub fn build(self) -> #struct_name <#(#generic_args),*> {
+                #struct_name::new(
+                    #(self.#builder_struct_member_names),*
+                )
             }
         }
-        let mut field_names = Vec::new();
-        for field in &field_info {
-            field_names.push(field.name.clone());
-        }
-        let constructor_def = quote! {
-            pub fn new(#(#params),*) -> Self {
-                #(#code)*
-                Self{ #(#field_names),* }
-            }
-        };
-        let builder_def = quote! {
-            pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
-                #(pub #builder_struct_members),*
-            }
-            impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
-                pub fn build(self) -> #struct_name <#(#generic_consumers),*> {
-                    #struct_name::new(
-                        #(self.#builder_struct_member_names),*
-                    )
-                }
-            }
-        };
-        (builder_def, constructor_def)
     };
+    (builder_def, constructor_def)
+}
 
-    // fn use_* generation
+fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
     let mut users = Vec::new();
-    for field in &field_info {
+    for field in field_info {
         let field_name = &field.name;
         let field_type = &field.typ;
         let user_name = format_ident!("use_{}", &field.name);
@@ -356,68 +408,98 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
             unimplemented!()
         }
     }
+    users
+}
 
-    // use_all_fields generation
-    let (all_fields_struct, use_all_fields_fn) = {
-        let mut fields = Vec::new();
-        let mut field_assignments = Vec::new();
-        // I don't think the reverse is necessary but it does make the expanded code more uniform.
-        for field in field_info.iter().rev() {
-            let field_name = &field.name;
-            let field_type = &field.typ;
-            if field.field_type == FieldType::Tail {
-                fields.push(quote! { pub #field_name: &'outer_borrow #field_type });
-                field_assignments.push(quote! { #field_name: &self.#field_name });
-            } else if field.field_type == FieldType::Borrowed {
-                fields.push(quote! { pub #field_name: &'outer_borrow <#field_type as ::std::ops::Deref>::Target });
-                field_assignments.push(quote! { #field_name: &*self.#field_name });
-            } else if field.field_type == FieldType::BorrowedMut {
-                unimplemented!()
-            }
+fn make_use_all_function(
+    field_info: &[StructFieldInfo],
+    generic_params: &Generics,
+    generic_args: &Vec<TokenStream2>,
+) -> (TokenStream2, TokenStream2) {
+    let mut fields = Vec::new();
+    let mut field_assignments = Vec::new();
+    // I don't think the reverse is necessary but it does make the expanded code more uniform.
+    for field in field_info.iter().rev() {
+        let field_name = &field.name;
+        let field_type = &field.typ;
+        if field.field_type == FieldType::Tail {
+            fields.push(quote! { pub #field_name: &'outer_borrow #field_type });
+            field_assignments.push(quote! { #field_name: &self.#field_name });
+        } else if field.field_type == FieldType::Borrowed {
+            fields.push(quote! { pub #field_name: &'outer_borrow <#field_type as ::std::ops::Deref>::Target });
+            field_assignments.push(quote! { #field_name: &*self.#field_name });
+        } else if field.field_type == FieldType::BorrowedMut {
+            unimplemented!()
         }
-        let all_fields_struct = if generic_producers.params.len() == 0 {
-            quote! {
-                struct BorrowedFields<'outer_borrow, 'this> { #(#fields),* }
-            }
-        } else {
-            let mut new_generic_producers = generic_producers.clone();
-            new_generic_producers
-                .params
-                .insert(0, syn::parse_quote! { 'this });
-            new_generic_producers
-                .params
-                .insert(0, syn::parse_quote! { 'outer_borrow });
-            quote! {
-                struct BorrowedFields #new_generic_producers { #(#fields),* }
-            }
-        };
-        let borrowed_fields_type = if generic_consumers.len() == 0 {
-            quote! { BorrowedFields<'outer_borrow, 'this> }
-        } else {
-            let mut new_generic_consumers = generic_consumers.clone();
-            new_generic_consumers.insert(0, quote! { 'this });
-            new_generic_consumers.insert(0, quote! { 'outer_borrow });
-            quote! { BorrowedFields <#(#new_generic_consumers),*> }
-        };
-        let use_all_fields_fn = quote! {
-            pub fn use_all_fields <'outer_borrow, ReturnType>(
-                &'outer_borrow self,
-                user: impl for <'this> FnOnce(#borrowed_fields_type) -> ReturnType
-            ) -> ReturnType {
-                user(BorrowedFields {
-                    #(#field_assignments),*
-                })
-            }
-        };
-        (all_fields_struct, use_all_fields_fn)
+    }
+    let all_fields_struct = if generic_params.params.len() == 0 {
+        quote! {
+            struct BorrowedFields<'outer_borrow, 'this> { #(#fields),* }
+        }
+    } else {
+        let mut new_generic_params = generic_params.clone();
+        new_generic_params
+            .params
+            .insert(0, syn::parse_quote! { 'this });
+        new_generic_params
+            .params
+            .insert(0, syn::parse_quote! { 'outer_borrow });
+        quote! {
+            struct BorrowedFields #new_generic_params { #(#fields),* }
+        }
     };
+    let borrowed_fields_type = if generic_args.len() == 0 {
+        quote! { BorrowedFields<'outer_borrow, 'this> }
+    } else {
+        let mut new_generic_args = generic_args.clone();
+        new_generic_args.insert(0, quote! { 'this });
+        new_generic_args.insert(0, quote! { 'outer_borrow });
+        quote! { BorrowedFields <#(#new_generic_args),*> }
+    };
+    let use_all_fields_fn = quote! {
+        pub fn use_all_fields <'outer_borrow, ReturnType>(
+            &'outer_borrow self,
+            user: impl for <'this> FnOnce(#borrowed_fields_type) -> ReturnType
+        ) -> ReturnType {
+            user(BorrowedFields {
+                #(#field_assignments),*
+            })
+        }
+    };
+    (all_fields_struct, use_all_fields_fn)
+}
 
-    let final_data = TokenStream::from(quote! {
+#[proc_macro_attribute]
+pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
+    let struct_name = &original_struct_def.ident;
+    let mod_name = format_ident!("ouroboros_impl_{}", struct_name.to_string().to_snake_case());
+    let visibility = &original_struct_def.vis;
+
+    let (actual_struct_def, field_info) = create_actual_struct(&original_struct_def);
+
+    let generic_params = original_struct_def.generics.clone();
+    let generic_args = make_generic_arguments(&generic_params);
+
+    let builder_struct_name = format_ident!("{}Builder", struct_name);
+    let (builder_def, constructor_def) = create_builder_and_constructor(
+        &struct_name,
+        &builder_struct_name,
+        &generic_params,
+        &generic_args,
+        &field_info[..],
+    );
+
+    let users = make_use_functions(&field_info[..]);
+    let (all_fields_struct, use_all_fields_fn) =
+        make_use_all_function(&field_info[..], &generic_params, &generic_args);
+
+    TokenStream::from(quote! {
         mod #mod_name {
             #actual_struct_def
             pub #all_fields_struct
             #builder_def
-            impl #generic_producers #struct_name <#(#generic_consumers),*> {
+            impl #generic_params #struct_name <#(#generic_args),*> {
                 #constructor_def
                 #(#users)*
                 #use_all_fields_fn
@@ -425,7 +507,5 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
         #visibility use #mod_name :: #struct_name;
         #visibility use #mod_name :: #builder_struct_name;
-    });
-    // eprintln!("{:#?}", final_data);
-    final_data
+    })
 }
