@@ -31,7 +31,7 @@ fn main() {
         external: &external_int,
         ptr1_builder: |data| Result::<_, ()>::Ok(data),
         ptr2_builder: |data| Ok(data),
-    }.build().unwrap();
+    }.try_build().unwrap();
     println!("{:?}", test.use_data1_contents(|data| data));
     test.use_ptr2_mut(|data| **data = 444);
     let reffed_data = test.use_ptr2(|data| &**data);

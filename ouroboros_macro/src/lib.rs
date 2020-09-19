@@ -15,9 +15,9 @@ use syn::{
 enum FieldType {
     /// Not borrowed by other parts of the struct.
     Tail,
-    /// Immutably borrowed by at least one other member.
+    /// Immutably borrowed by at least one other field.
     Borrowed,
-    /// Mutably borrowed by one other member.
+    /// Mutably borrowed by one other field.
     BorrowedMut,
 }
 
@@ -281,7 +281,7 @@ fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<
         Fields::Unit => panic!("Unit structs cannot be self-referential."),
     }
     if field_info.len() < 2 {
-        panic!("Self-referencing structs must have at least 2 members.");
+        panic!("Self-referencing structs must have at least 2 fields.");
     }
     let mut has_non_tail = false;
     for field in &field_info {
@@ -294,12 +294,12 @@ fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<
         panic!(
             concat!(
                 "Self-referencing struct cannot be made entirely of tail fields, try adding ",
-                "#[borrows({0})] to a member defined after {0}."
+                "#[borrows({0})] to a field defined after {0}."
             ),
             field_info[0].name
         );
     }
-    // Reverse the order of all members. We ensure that items in the struct are only dependent
+    // Reverse the order of all fields. We ensure that items in the struct are only dependent
     // on references to items above them. Rust drops items in a struct in forward declaration order.
     // This would cause parents being dropped before children, necessitating the reversal.
     match &mut actual_struct_def.fields {
@@ -350,8 +350,8 @@ fn create_builder_and_constructor(
         .map(|param| quote! { #param })
         .collect();
     let mut builder_struct_generic_consumers: Vec<_> = generic_args.clone();
-    let mut builder_struct_members = Vec::new();
-    let mut builder_struct_member_names = Vec::new();
+    let mut builder_struct_fields = Vec::new();
+    let mut builder_struct_field_names = Vec::new();
 
     for field in field_info {
         let field_name = &field.name;
@@ -365,8 +365,8 @@ fn create_builder_and_constructor(
             } else {
                 params.push(quote! { #field_name: #plain_type });
             }
-            builder_struct_members.push(quote! { #field_name: #plain_type });
-            builder_struct_member_names.push(quote! { #field_name });
+            builder_struct_fields.push(quote! { #field_name: #plain_type });
+            builder_struct_field_names.push(quote! { #field_name });
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
             // contructor, and generic parameters need to be added to the builder struct to make
@@ -394,8 +394,8 @@ fn create_builder_and_constructor(
 
             builder_struct_generic_producers.push(quote! { #generic_type_name: #bound_type });
             builder_struct_generic_consumers.push(quote! { #generic_type_name });
-            builder_struct_members.push(quote! { #builder_name: #generic_type_name });
-            builder_struct_member_names.push(quote! { #builder_name });
+            builder_struct_fields.push(quote! { #builder_name: #generic_type_name });
+            builder_struct_field_names.push(quote! { #builder_name });
         }
 
         if field.field_type == FieldType::Borrowed {
@@ -413,12 +413,12 @@ fn create_builder_and_constructor(
     };
     let builder_def = quote! {
         pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
-            #(pub #builder_struct_members),*
+            #(pub #builder_struct_fields),*
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
             pub fn build(self) -> #struct_name <#(#generic_args),*> {
                 #struct_name::new(
-                    #(self.#builder_struct_member_names),*
+                    #(self.#builder_struct_field_names),*
                 )
             }
         }
@@ -433,7 +433,15 @@ fn create_try_builder_and_constructor(
     generic_args: &Vec<TokenStream2>,
     field_info: &[StructFieldInfo],
 ) -> (TokenStream2, TokenStream2) {
+    let mut head_field_names = Vec::new();
+    for field in field_info {
+        if field.borrows.len() == 0 {
+            head_field_names.push(&field.name);
+        }
+    }
+
     let mut code: Vec<TokenStream2> = Vec::new();
+    let mut or_recover_code: Vec<TokenStream2> = Vec::new();
     let mut params: Vec<TokenStream2> = Vec::new();
     let mut builder_struct_generic_producers: Vec<_> = generic_params
         .params
@@ -441,8 +449,8 @@ fn create_try_builder_and_constructor(
         .map(|param| quote! { #param })
         .collect();
     let mut builder_struct_generic_consumers: Vec<_> = generic_args.clone();
-    let mut builder_struct_members = Vec::new();
-    let mut builder_struct_member_names = Vec::new();
+    let mut builder_struct_fields = Vec::new();
+    let mut builder_struct_field_names = Vec::new();
 
     for field in field_info {
         let field_name = &field.name;
@@ -456,8 +464,8 @@ fn create_try_builder_and_constructor(
             } else {
                 params.push(quote! { #field_name: #plain_type });
             }
-            builder_struct_members.push(quote! { #field_name: #plain_type });
-            builder_struct_member_names.push(quote! { #field_name });
+            builder_struct_fields.push(quote! { #field_name: #plain_type });
+            builder_struct_field_names.push(quote! { #field_name });
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
             // contructor, and generic parameters need to be added to the builder struct to make
@@ -474,25 +482,35 @@ fn create_try_builder_and_constructor(
                     field_info[borrow.index].name
                 ));
             }
-            if field.field_type == FieldType::BorrowedMut {
-                // If other fields borrow it mutably, we need to make the variable mutable.
-                code.push(quote! { let mut #field_name = #builder_name (#(#builder_args),*)?; });
+            let maybe_mut = if field.field_type == FieldType::BorrowedMut {
+                // If other fields borrow this field mutably, we need to make the variable mutable.
+                quote! { mut }
             } else {
-                code.push(quote! { let #field_name = #builder_name (#(#builder_args),*)?; });
-            }
+                quote! {}
+            };
+            code.push(quote! { let #maybe_mut #field_name = #builder_name (#(#builder_args),*)?; });
+            or_recover_code.push(quote! {
+                let #maybe_mut #field_name = match #builder_name (#(#builder_args),*) {
+                    ::std::result::Result::Ok(value) => value,
+                    ::std::result::Result::Err(err) 
+                        => return ::std::result::Result::Err((err, Heads { #(#head_field_names),* })),
+                };
+            });
             let generic_type_name =
                 format_ident!("{}Builder_", field_name.to_string().to_class_case());
 
             builder_struct_generic_producers.push(quote! { #generic_type_name: #bound_type });
             builder_struct_generic_consumers.push(quote! { #generic_type_name });
-            builder_struct_members.push(quote! { #builder_name: #generic_type_name });
-            builder_struct_member_names.push(quote! { #builder_name });
+            builder_struct_fields.push(quote! { #builder_name: #generic_type_name });
+            builder_struct_field_names.push(quote! { #builder_name });
         }
 
         if field.field_type == FieldType::Borrowed {
             code.push(field.make_illegal_static_reference());
+            or_recover_code.push(field.make_illegal_static_reference());
         } else if field.field_type == FieldType::BorrowedMut {
             code.push(field.make_illegal_static_mut_reference());
+            or_recover_code.push(field.make_illegal_static_mut_reference());
         }
     }
     let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
@@ -501,17 +519,26 @@ fn create_try_builder_and_constructor(
             #(#code)*
             ::std::result::Result::Ok(Self{ #(#field_names),* })
         }
+        pub fn try_new_or_recover<Error_>(#(#params),*) -> ::std::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
+            #(#or_recover_code)*
+            ::std::result::Result::Ok(Self{ #(#field_names),* })
+        }
     };
     builder_struct_generic_producers.push(quote! { Error_ });
     builder_struct_generic_consumers.push(quote! { Error_ });
     let builder_def = quote! {
         pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
-            #(pub #builder_struct_members),*
+            #(pub #builder_struct_fields),*
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
-            pub fn build(self) -> Result<#struct_name <#(#generic_args),*>, Error_> {
+            pub fn try_build(self) -> Result<#struct_name <#(#generic_args),*>, Error_> {
                 #struct_name::try_new(
-                    #(self.#builder_struct_member_names),*
+                    #(self.#builder_struct_field_names),*
+                )
+            }
+            pub fn try_build_or_recover(self) -> Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
+                #struct_name::try_new_or_recover(
+                    #(self.#builder_struct_field_names),*
                 )
             }
         }
@@ -525,7 +552,7 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
         let field_name = &field.name;
         let field_type = &field.typ;
         // If the field is not a tail, we need to serve up the same kind of reference that other
-        // members in the struct may have borrowed to ensure safety.
+        // fields in the struct may have borrowed to ensure safety.
         if field.field_type == FieldType::Tail {
             let user_name = format_ident!("use_{}", &field.name);
             users.push(quote! {
