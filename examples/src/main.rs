@@ -12,8 +12,8 @@ pub struct Test<'a, D: 'static + Clone> {
     external: &'a D,
     #[borrows(data1)]
     ptr1: &'this D,
-    #[borrows(data2)]
-    ptr2: &'this D,
+    #[borrows(mut data2)]
+    ptr2: &'this mut D,
 }
 
 #[self_referencing]
@@ -32,10 +32,8 @@ fn main() {
         ptr1_builder: |data| data,
         ptr2_builder: |data| data,
     }.build();
-    let reffed_data = test.use_ptr2(|data| *data);
+    test.use_ptr2_mut(|data| **data = 444);
+    let reffed_data = test.use_ptr2(|data| &**data);
     println!("{:?}", reffed_data);
-    test.use_all_fields_mut(|all_fields| {
-        *all_fields.ptr2 = *all_fields.ptr1;
-    });
     drop(test);
 }

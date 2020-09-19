@@ -66,6 +66,17 @@ impl StructFieldInfo {
             };
         }
     }
+
+    /// Like make_illegal_static_reference, but provides a mutable reference instead.
+    fn make_illegal_static_mut_reference(&self) -> TokenStream2 {
+        let field_name = &self.name;
+        let ref_name = self.illegal_ref_name();
+        quote! {
+            let #ref_name = unsafe {
+                ::ouroboros::macro_help::stable_deref_and_strip_lifetime_mut(&mut #field_name)
+            };
+        }
+    }
 }
 
 enum ArgType {
@@ -89,7 +100,11 @@ fn make_constructor_arg_type(
         let mut field_builder_params = Vec::new();
         for borrow in &for_field.borrows {
             if borrow.mutable {
-                unimplemented!();
+                let field = &other_fields[borrow.index];
+                let field_type = &field.typ;
+                field_builder_params.push(quote! {
+                    &'this mut <#field_type as ::std::ops::Deref>::Target
+                });
             } else {
                 let field = &other_fields[borrow.index];
                 let field_type = &field.typ;
@@ -291,7 +306,7 @@ fn make_generic_arguments(generic_params: &Generics) -> Vec<TokenStream2> {
                 let lifetime = &lt.lifetime;
                 arguments.push(quote! { #lifetime });
             }
-            GenericParam::Const(_) => unimplemented!(),
+            GenericParam::Const(_) => unimplemented!("Const generics are not supported yet."),
         }
     }
     arguments
@@ -321,7 +336,12 @@ fn create_builder_and_constructor(
         let arg_type = make_constructor_arg_type(&field, &field_info[..]);
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
-            params.push(quote! { #field_name: #plain_type });
+            if field.field_type == FieldType::BorrowedMut {
+                // If other fields borrow it mutably, we need to make the argument mutable.
+                params.push(quote! { mut #field_name: #plain_type });
+            } else {
+                params.push(quote! { #field_name: #plain_type });
+            }
             builder_struct_members.push(quote! { #field_name: #plain_type });
             builder_struct_member_names.push(quote! { #field_name });
         } else if let ArgType::TraitBound(bound_type) = arg_type {
@@ -340,7 +360,12 @@ fn create_builder_and_constructor(
                     field_info[borrow.index].name
                 ));
             }
-            code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
+            if field.field_type == FieldType::BorrowedMut {
+                // If other fields borrow it mutably, we need to make the variable mutable.
+                code.push(quote! { let mut #field_name = #builder_name (#(#builder_args),*); });
+            } else {
+                code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
+            }
             let generic_type_name =
                 format_ident!("{}Builder_", field_name.to_string().to_class_case());
 
@@ -353,7 +378,7 @@ fn create_builder_and_constructor(
         if field.field_type == FieldType::Borrowed {
             code.push(field.make_illegal_static_reference());
         } else if field.field_type == FieldType::BorrowedMut {
-            unimplemented!();
+            code.push(field.make_illegal_static_mut_reference());
         }
     }
     let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
@@ -442,8 +467,9 @@ fn make_use_all_function(
             mut_fields.push(quote! { pub #field_name: &'outer_borrow mut #field_type });
             mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
-            fields.push(quote! { pub #field_name: &'outer_borrow <#field_type as ::std::ops::Deref>::Target });
-            field_assignments.push(quote! { #field_name: &*self.#field_name });
+            let value_name = format_ident!("{}_contents", field_name);
+            fields.push(quote! { pub #value_name: &'outer_borrow <#field_type as ::std::ops::Deref>::Target });
+            field_assignments.push(quote! { #value_name: &*self.#field_name });
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
             // borrowed.
