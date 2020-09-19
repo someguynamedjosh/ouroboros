@@ -32,8 +32,12 @@ fn main() {
         ptr1_builder: |data| Result::<_, ()>::Ok(data),
         ptr2_builder: |data| Ok(data),
     }.build().unwrap();
+    println!("{:?}", test.use_data1_contents(|data| data));
     test.use_ptr2_mut(|data| **data = 444);
     let reffed_data = test.use_ptr2(|data| &**data);
     println!("{:?}", reffed_data);
-    drop(test);
+    
+    let heads = test.into_heads();
+    println!("{:?}", heads.data2);
+    assert!(heads.data2 == Box::new(444));
 }

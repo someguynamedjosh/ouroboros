@@ -638,6 +638,45 @@ fn make_use_all_function(
     (struct_defs, fn_defs)
 }
 
+/// Returns the Heads struct and a function to convert the original struct into a Heads instance.
+fn make_into_heads(
+    field_info: &[StructFieldInfo],
+    generic_params: &Generics,
+    generic_args: &Vec<TokenStream2>,
+) -> (TokenStream2, TokenStream2) {
+    let mut code = Vec::new();
+    let mut field_names = Vec::new();
+    let mut head_fields = Vec::new();
+    // Drop everything in the reverse order of what it was declared in. Fields that come later
+    // are only dependent on fields that came before them.
+    for field in field_info.iter().rev() {
+        let field_name = &field.name;
+        // Heads are fields that do not borrow anything.
+        if field.borrows.len() > 0 {
+            code.push(quote! { drop(self.#field_name); });
+        } else {
+            code.push(quote! { let #field_name = self.#field_name; });
+            field_names.push(field_name);
+            let field_type = &field.typ;
+            head_fields.push(quote! { pub #field_name: #field_type });
+        }
+    }
+    let heads_struct_def = quote! {
+        pub struct Heads #generic_params {
+            #(#head_fields),*
+        }
+    };
+    let into_heads_fn = quote! {
+        pub fn into_heads(self) -> Heads<#(#generic_args),*> {
+            #(#code)*
+            Heads {
+                #(#field_names),*
+            }
+        }
+    };
+    (heads_struct_def, into_heads_fn)
+}
+
 #[proc_macro_attribute]
 pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
@@ -670,18 +709,22 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let users = make_use_functions(&field_info[..]);
     let (use_all_struct_defs, use_all_fn_defs) =
         make_use_all_function(&field_info[..], &generic_params, &generic_args);
+    let (heads_struct_def, into_heads_fn) =
+        make_into_heads(&field_info[..], &generic_params, &generic_args);
 
     TokenStream::from(quote! {
         mod #mod_name {
             #actual_struct_def
-            #use_all_struct_defs
             #builder_def
             #try_builder_def
+            #use_all_struct_defs
+            #heads_struct_def
             impl #generic_params #struct_name <#(#generic_args),*> {
                 #constructor_def
                 #try_constructor_def
                 #(#users)*
                 #use_all_fn_defs
+                #into_heads_fn
             }
         }
         #visibility use #mod_name :: #struct_name;
