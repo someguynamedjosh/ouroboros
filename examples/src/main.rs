@@ -25,13 +25,13 @@ pub struct Test2 {
 
 fn main() {
     let external_int = 123;
-    let mut test = TestBuilder {
+    let mut test = TestTryBuilder {
         data1: Box::new(321),
         data2: Box::new(555),
         external: &external_int,
-        ptr1_builder: |data| data,
-        ptr2_builder: |data| data,
-    }.build();
+        ptr1_builder: |data| Result::<_, ()>::Ok(data),
+        ptr2_builder: |data| Ok(data),
+    }.build().unwrap();
     test.use_ptr2_mut(|data| **data = 444);
     let reffed_data = test.use_ptr2(|data| &**data);
     println!("{:?}", reffed_data);

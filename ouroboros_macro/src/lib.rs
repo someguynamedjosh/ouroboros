@@ -87,11 +87,10 @@ enum ArgType {
     TraitBound(TokenStream2),
 }
 
-/// Returns a trait bound if `for_field` refers to any other fields, and a plain type if not. This
-/// is the type used in the constructor to initialize the value of `for_field`.
-fn make_constructor_arg_type(
+fn make_constructor_arg_type_impl(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
+    make_builder_return_type: impl FnOnce() -> TokenStream2,
 ) -> ArgType {
     let field_type = &for_field.typ;
     if for_field.borrows.len() == 0 {
@@ -113,9 +112,33 @@ fn make_constructor_arg_type(
                 });
             }
         }
-        let bound = quote! { for<'this> FnOnce(#(#field_builder_params),*) -> #field_type };
+        let return_type = make_builder_return_type();
+        let bound = quote! { for<'this> FnOnce(#(#field_builder_params),*) -> #return_type };
         ArgType::TraitBound(bound)
     }
+}
+
+/// Returns a trait bound if `for_field` refers to any other fields, and a plain type if not. This
+/// is the type used in the constructor to initialize the value of `for_field`.
+fn make_constructor_arg_type(
+    for_field: &StructFieldInfo,
+    other_fields: &[StructFieldInfo],
+) -> ArgType {
+    let field_type = &for_field.typ;
+    make_constructor_arg_type_impl(for_field, other_fields, || quote! { #field_type })
+}
+
+/// Like make_constructor_arg_type, but used for the try_new constructor.
+fn make_try_constructor_arg_type(
+    for_field: &StructFieldInfo,
+    other_fields: &[StructFieldInfo],
+) -> ArgType {
+    let field_type = &for_field.typ;
+    make_constructor_arg_type_impl(
+        for_field,
+        other_fields,
+        || quote! { Result<#field_type, Error_> },
+    )
 }
 
 fn replace_this_with_static(input: TokenStream2) -> TokenStream2 {
@@ -403,6 +426,99 @@ fn create_builder_and_constructor(
     (builder_def, constructor_def)
 }
 
+fn create_try_builder_and_constructor(
+    struct_name: &Ident,
+    builder_struct_name: &Ident,
+    generic_params: &Generics,
+    generic_args: &Vec<TokenStream2>,
+    field_info: &[StructFieldInfo],
+) -> (TokenStream2, TokenStream2) {
+    let mut code: Vec<TokenStream2> = Vec::new();
+    let mut params: Vec<TokenStream2> = Vec::new();
+    let mut builder_struct_generic_producers: Vec<_> = generic_params
+        .params
+        .iter()
+        .map(|param| quote! { #param })
+        .collect();
+    let mut builder_struct_generic_consumers: Vec<_> = generic_args.clone();
+    let mut builder_struct_members = Vec::new();
+    let mut builder_struct_member_names = Vec::new();
+
+    for field in field_info {
+        let field_name = &field.name;
+
+        let arg_type = make_try_constructor_arg_type(&field, &field_info[..]);
+        if let ArgType::Plain(plain_type) = arg_type {
+            // No fancy builder function, we can just move the value directly into the struct.
+            if field.field_type == FieldType::BorrowedMut {
+                // If other fields borrow it mutably, we need to make the argument mutable.
+                params.push(quote! { mut #field_name: #plain_type });
+            } else {
+                params.push(quote! { #field_name: #plain_type });
+            }
+            builder_struct_members.push(quote! { #field_name: #plain_type });
+            builder_struct_member_names.push(quote! { #field_name });
+        } else if let ArgType::TraitBound(bound_type) = arg_type {
+            // Trait bounds are much trickier. We need a special syntax to accept them in the
+            // contructor, and generic parameters need to be added to the builder struct to make
+            // it work.
+            let builder_name = field.builder_name();
+            params.push(quote! { #builder_name : impl #bound_type });
+            // Ok so hear me out basically without this thing here my IDE thinks the rest of the
+            // code is a string and it all turns green.
+            {}
+            let mut builder_args = Vec::new();
+            for borrow in &field.borrows {
+                builder_args.push(format_ident!(
+                    "{}_illegal_static_reference",
+                    field_info[borrow.index].name
+                ));
+            }
+            if field.field_type == FieldType::BorrowedMut {
+                // If other fields borrow it mutably, we need to make the variable mutable.
+                code.push(quote! { let mut #field_name = #builder_name (#(#builder_args),*)?; });
+            } else {
+                code.push(quote! { let #field_name = #builder_name (#(#builder_args),*)?; });
+            }
+            let generic_type_name =
+                format_ident!("{}Builder_", field_name.to_string().to_class_case());
+
+            builder_struct_generic_producers.push(quote! { #generic_type_name: #bound_type });
+            builder_struct_generic_consumers.push(quote! { #generic_type_name });
+            builder_struct_members.push(quote! { #builder_name: #generic_type_name });
+            builder_struct_member_names.push(quote! { #builder_name });
+        }
+
+        if field.field_type == FieldType::Borrowed {
+            code.push(field.make_illegal_static_reference());
+        } else if field.field_type == FieldType::BorrowedMut {
+            code.push(field.make_illegal_static_mut_reference());
+        }
+    }
+    let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
+    let constructor_def = quote! {
+        pub fn try_new<Error_>(#(#params),*) -> ::std::result::Result<Self, Error_> {
+            #(#code)*
+            ::std::result::Result::Ok(Self{ #(#field_names),* })
+        }
+    };
+    builder_struct_generic_producers.push(quote! { Error_ });
+    builder_struct_generic_consumers.push(quote! { Error_ });
+    let builder_def = quote! {
+        pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
+            #(pub #builder_struct_members),*
+        }
+        impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
+            pub fn build(self) -> Result<#struct_name <#(#generic_args),*>, Error_> {
+                #struct_name::try_new(
+                    #(self.#builder_struct_member_names),*
+                )
+            }
+        }
+    };
+    (builder_def, constructor_def)
+}
+
 fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
     let mut users = Vec::new();
     for field in field_info {
@@ -542,6 +658,14 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         &generic_args,
         &field_info[..],
     );
+    let try_builder_struct_name = format_ident!("{}TryBuilder", struct_name);
+    let (try_builder_def, try_constructor_def) = create_try_builder_and_constructor(
+        &struct_name,
+        &try_builder_struct_name,
+        &generic_params,
+        &generic_args,
+        &field_info[..],
+    );
 
     let users = make_use_functions(&field_info[..]);
     let (use_all_struct_defs, use_all_fn_defs) =
@@ -552,13 +676,16 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #actual_struct_def
             #use_all_struct_defs
             #builder_def
+            #try_builder_def
             impl #generic_params #struct_name <#(#generic_args),*> {
                 #constructor_def
+                #try_constructor_def
                 #(#users)*
                 #use_all_fn_defs
             }
         }
         #visibility use #mod_name :: #struct_name;
         #visibility use #mod_name :: #builder_struct_name;
+        #visibility use #mod_name :: #try_builder_struct_name;
     })
 }
