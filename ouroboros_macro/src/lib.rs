@@ -383,10 +383,10 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
     for field in field_info {
         let field_name = &field.name;
         let field_type = &field.typ;
-        let user_name = format_ident!("use_{}", &field.name);
         // If the field is not a tail, we need to serve up the same kind of reference that other
         // members in the struct may have borrowed to ensure safety.
         if field.field_type == FieldType::Tail {
+            let user_name = format_ident!("use_{}", &field.name);
             users.push(quote! {
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
@@ -395,7 +395,18 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
                     user(&self. #field_name)
                 }
             });
+            // If it is not borrowed at all it's safe to allow mutably borrowing it.
+            let user_name = format_ident!("use_{}_mut", &field.name);
+            users.push(quote! {
+                pub fn #user_name <'outer_borrow, ReturnType>(
+                    &'outer_borrow mut self,
+                    user: impl for<'this> FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
+                ) -> ReturnType {
+                    user(&mut self. #field_name)
+                }
+            });
         } else if field.field_type == FieldType::Borrowed {
+            let user_name = format_ident!("use_{}_contents", &field.name);
             users.push(quote! {
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
@@ -405,7 +416,8 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
                 }
             });
         } else if field.field_type == FieldType::BorrowedMut {
-            unimplemented!()
+            // Do not generate anything becaue if it is borrowed mutably once, we should not be able
+            // to get any other kinds of references to it.
         }
     }
     users
@@ -418,6 +430,8 @@ fn make_use_all_function(
 ) -> (TokenStream2, TokenStream2) {
     let mut fields = Vec::new();
     let mut field_assignments = Vec::new();
+    let mut mut_fields = Vec::new();
+    let mut mut_field_assignments = Vec::new();
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
     for field in field_info.iter().rev() {
         let field_name = &field.name;
@@ -425,17 +439,19 @@ fn make_use_all_function(
         if field.field_type == FieldType::Tail {
             fields.push(quote! { pub #field_name: &'outer_borrow #field_type });
             field_assignments.push(quote! { #field_name: &self.#field_name });
+            mut_fields.push(quote! { pub #field_name: &'outer_borrow mut #field_type });
+            mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
             fields.push(quote! { pub #field_name: &'outer_borrow <#field_type as ::std::ops::Deref>::Target });
             field_assignments.push(quote! { #field_name: &*self.#field_name });
         } else if field.field_type == FieldType::BorrowedMut {
-            unimplemented!()
+            // Add nothing because we cannot borrow something that has already been mutably
+            // borrowed.
         }
     }
-    let all_fields_struct = if generic_params.params.len() == 0 {
-        quote! {
-            struct BorrowedFields<'outer_borrow, 'this> { #(#fields),* }
-        }
+
+    let new_generic_params = if generic_params.params.len() == 0 {
+        quote! { <'outer_borrow, 'this> }
     } else {
         let mut new_generic_params = generic_params.clone();
         new_generic_params
@@ -444,19 +460,22 @@ fn make_use_all_function(
         new_generic_params
             .params
             .insert(0, syn::parse_quote! { 'outer_borrow });
-        quote! {
-            struct BorrowedFields #new_generic_params { #(#fields),* }
-        }
+        quote! { #new_generic_params }
     };
-    let borrowed_fields_type = if generic_args.len() == 0 {
-        quote! { BorrowedFields<'outer_borrow, 'this> }
-    } else {
-        let mut new_generic_args = generic_args.clone();
-        new_generic_args.insert(0, quote! { 'this });
-        new_generic_args.insert(0, quote! { 'outer_borrow });
-        quote! { BorrowedFields <#(#new_generic_args),*> }
+    let new_generic_args = {
+        let mut args = generic_args.clone();
+        args.insert(0, quote! { 'this });
+        args.insert(0, quote! { 'outer_borrow });
+        args
     };
-    let use_all_fields_fn = quote! {
+
+    let struct_defs = quote! {
+        pub struct BorrowedFields #new_generic_params { #(#fields),* }
+        pub struct BorrowedMutFields #new_generic_params { #(#mut_fields),* }
+    };
+    let borrowed_fields_type = quote! { BorrowedFields<#(#new_generic_args),*> };
+    let borrowed_mut_fields_type = quote! { BorrowedMutFields<#(#new_generic_args),*> };
+    let fn_defs = quote! {
         pub fn use_all_fields <'outer_borrow, ReturnType>(
             &'outer_borrow self,
             user: impl for <'this> FnOnce(#borrowed_fields_type) -> ReturnType
@@ -465,8 +484,16 @@ fn make_use_all_function(
                 #(#field_assignments),*
             })
         }
+        pub fn use_all_fields_mut <'outer_borrow, ReturnType>(
+            &'outer_borrow mut self,
+            user: impl for <'this> FnOnce(#borrowed_mut_fields_type) -> ReturnType
+        ) -> ReturnType {
+            user(BorrowedMutFields {
+                #(#mut_field_assignments),*
+            })
+        }
     };
-    (all_fields_struct, use_all_fields_fn)
+    (struct_defs, fn_defs)
 }
 
 #[proc_macro_attribute]
@@ -491,18 +518,18 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
     );
 
     let users = make_use_functions(&field_info[..]);
-    let (all_fields_struct, use_all_fields_fn) =
+    let (use_all_struct_defs, use_all_fn_defs) =
         make_use_all_function(&field_info[..], &generic_params, &generic_args);
 
     TokenStream::from(quote! {
         mod #mod_name {
             #actual_struct_def
-            pub #all_fields_struct
+            #use_all_struct_defs
             #builder_def
             impl #generic_params #struct_name <#(#generic_args),*> {
                 #constructor_def
                 #(#users)*
-                #use_all_fields_fn
+                #use_all_fn_defs
             }
         }
         #visibility use #mod_name :: #struct_name;

@@ -7,9 +7,12 @@ struct RefHolder<'a> {
 
 #[self_referencing]
 pub struct Test<'a, D: 'static + Clone> {
-    data: Box<D>,
+    data1: Box<D>,
+    data2: Box<D>,
     external: &'a D,
-    #[borrows(data)]
+    #[borrows(data1)]
+    ptr1: &'this D,
+    #[borrows(data2)]
     ptr2: &'this D,
 }
 
@@ -22,18 +25,17 @@ pub struct Test2 {
 
 fn main() {
     let external_int = 123;
-    let test: Test<i32> = Test::new(Box::new(321), &external_int, |data| data);
-    let reffed_data = test.use_ptr2(|data| *data);
-    println!("{:?}", reffed_data);
-    drop(test);
-
-    let external_int = 123;
-    let test = TestBuilder {
-        data: Box::new(321),
+    let mut test = TestBuilder {
+        data1: Box::new(321),
+        data2: Box::new(555),
         external: &external_int,
+        ptr1_builder: |data| data,
         ptr2_builder: |data| data,
     }.build();
     let reffed_data = test.use_ptr2(|data| *data);
     println!("{:?}", reffed_data);
+    test.use_all_fields_mut(|all_fields| {
+        *all_fields.ptr2 = *all_fields.ptr1;
+    });
     drop(test);
 }
