@@ -8,9 +8,11 @@ pub struct BoxAndRef {
     data_ref: &'this i32,
 }
 
-/// A chain of references, where c references b which references a.
-#[self_referencing]
-pub struct ChainRef {
+/// A chain of references, where c references b which references a. This is an example of a struct
+/// which requires using [chain_hack](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#using-chain_hack)
+/// as of the time this was written.
+#[self_referencing(chain_hack)]
+pub struct ChainHack {
     a: Box<i32>,
     #[borrows(a)]
     b: Box<&'this i32>,

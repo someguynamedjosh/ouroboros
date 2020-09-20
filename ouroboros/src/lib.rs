@@ -45,7 +45,7 @@
 /// }
 /// ```
 /// To explain the features and limitations of this crate, some definitions are necessary:
-/// # Definitions:
+/// # Definitions
 /// - **immutably borrowed field**: a field which is immutably borrowed by at least one other field.
 /// - **mutably borrowed field**: a field which is immutably borrowed by exactly one other field.
 /// - **self-referencing field**: a field which borrows at least one other field.
@@ -58,14 +58,77 @@
 /// be prefixed to indicate that a mutable borrow is required. For example,
 /// `#[borrows(a, b, mut c)]` indicates that the first two fields need to be borrowed immutably and
 /// the third needs to be borrowed mutably.
-/// # You must comply with these limitations:
+/// # You must comply with these limitations
 /// - Fields must be declared before the first time they are borrowed.
 /// - Normal borrowing rules apply, E.G. a field cannot be borrowed mutably twice.
 /// - Fields that are borrowed must be of a data type that implement
 ///   [`StableDeref`](https://docs.rs/stable_deref_trait/1.2.0/stable_deref_trait/trait.StableDeref.html).
 ///   Normally this just means `Box<T>`.
 ///
-/// Violating them will result in a compile error.
+/// Violating them will result in a nice error message directly pointing out the violated rule.
+/// # Flexibility of this crate
+/// The example above uses plain references as the self-referencing part of the struct, but you can
+/// use anything that is dependent on lifetimes of objects inside the struct. For example, you could
+/// do something like this:
+/// ```rust
+/// use ouroboros::self_referencing;
+/// 
+/// pub struct ComplexData<'a, 'b> {
+///     aref: &'a i32,
+///     bref: &'b mut i32,
+///     number: i32,
+/// }
+/// 
+/// impl<'a, 'b> ComplexData<'a, 'b> {
+///     fn new(aref: &'a i32, bref: &'b mut i32, number: i32) -> Self {
+///         Self { aref, bref, number }
+///     }
+/// 
+///     /// Copies the value aref points to into what bref points to.
+///     fn transfer(&mut self) {
+///         *self.bref = *self.aref;
+///     }
+/// 
+///     /// Prints the value bref points to.
+///     fn print_bref(&self) {
+///         println!("{}", *self.bref);
+///     }
+/// }
+/// 
+/// #[self_referencing]
+/// struct DataStorage {
+///     immutable: Box<i32>,
+///     mutable: Box<i32>,
+///     #[borrows(immutable, mut mutable)]
+///     complex_data: ComplexData<'this, 'this>,
+/// }
+/// 
+/// fn main() {
+///     let mut data_storage = DataStorageBuilder {
+///         immutable: Box::new(10),
+///         mutable: Box::new(20),
+///         complex_data_builder: |i: &i32, m: &mut i32| ComplexData::new(i, m, 12345),
+///     }.build();
+///     data_storage.use_complex_data_mut(|data| {
+///         // Copies the value in immutable into mutable.
+///         data.transfer();
+///         // Prints 10
+///         data.print_bref();
+///     });
+/// }
+/// ```
+/// # Using `chain_hack`
+/// Unfortunately, as of September 2020, Rust has a 
+/// [known limitation in its type checker](https://users.rust-lang.org/t/why-does-this-not-compile-box-t-target-t/49027/7?u=aaaaa) 
+/// which prevents chained references from working (I.E. structs where field C references field B 
+/// which references field A.) To counteract this problem, you can use 
+/// `#[self_referencing(chain_hack)]` to allow creating these kinds of structs at the cost of
+/// additional restrictions and possible loss of clarity in some error messages. The main limitation
+/// is that all fields that are borrowed must be of type `Box<T>`. A nice error message will be
+/// generated if you use a different type. There should be no other limitations, but some
+/// configurations may produce strange compiler errors. If you find such a configuration, please
+/// open an issue on the [Github repository](https://github.com/joshua-maros/ouroboros/issues).
+/// You can view a documented example of a struct which uses `chain_hack` [here](https://docs.rs/ouroboros_examples/latest/ouroboros_examples/struct.ChainHack.html).
 /// # What does the macro generate?
 /// The `#[self_referencing]` struct will replace your definition with an unsafe self-referencing
 /// struct with a safe public interface. Many functions will be generated depending on your original
