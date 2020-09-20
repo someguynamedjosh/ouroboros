@@ -47,7 +47,7 @@
 /// To explain the features and limitations of this crate, some definitions are necessary:
 /// # Definitions:
 /// - **immutably borrowed field**: a field which is immutably borrowed by at least one other field.
-/// - **mutably borrowed field**: a field which is immutably borrowed by exactly one other field.
+/// - **mutably borrowed field**: a field which is mutably borrowed by exactly one other field.
 /// - **self-referencing field**: a field which borrows at least one other field.
 /// - **head field**: a field which does not borrow any other fields, I.E. not self-referencing.
 /// - **tail field**: a field which is not borrowed by any other fields.
