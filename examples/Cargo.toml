@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Joshua Maros <joshua-maros@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
+description = "Examples for the ouroboros crate."
 
 [dependencies]
 ouroboros = { path = "../ouroboros" }

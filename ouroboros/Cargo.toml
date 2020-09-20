@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Joshua Maros <joshua-maros@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
+description = "Easy, safe self-referential struct generation."
 
 [dependencies]
 ouroboros_macro = { path = "../ouroboros_macro" }
