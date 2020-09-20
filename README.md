@@ -1,6 +1,6 @@
 # Ouroboros
 
-[![Ouroboros on Crates.IO](https://img.shields.io/crates/v/ouroboros)](https://crates.io/crate/ouroboros)
+[![Ouroboros on Crates.IO](https://img.shields.io/crates/v/ouroboros)](https://crates.io/crates/ouroboros)
 [![Documentation](https://img.shields.io/badge/documentation-link-success)](https://docs.rs/ouroboros)
 
 
