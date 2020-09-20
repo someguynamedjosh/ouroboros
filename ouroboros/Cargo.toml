@@ -7,5 +7,5 @@ license = "MIT OR Apache-2.0"
 description = "Easy, safe self-referential struct generation."
 
 [dependencies]
-ouroboros_macro = { path = "../ouroboros_macro" }
+ouroboros_macro = { version = "0.1", path = "../ouroboros_macro" }
 stable_deref_trait = "1.2"

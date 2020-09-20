@@ -7,4 +7,4 @@ license = "MIT OR Apache-2.0"
 description = "Examples for the ouroboros crate."
 
 [dependencies]
-ouroboros = { path = "../ouroboros" }
+ouroboros = { version = "0.1", path = "../ouroboros" }
