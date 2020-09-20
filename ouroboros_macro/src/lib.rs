@@ -48,15 +48,15 @@ impl StructFieldInfo {
         format_ident!("{}_illegal_static_reference", self.name)
     }
 
-    /// Returns code which takes a variable with the same name and type as this field and turns it
-    /// into a static reference to its dereffed contents. For example, suppose a field
-    /// `test: Box<i32>`. This method would generate code that looks like:
-    /// ```rust
-    /// // Variable name taken from self.illegal_ref_name()
-    /// let test_illegal_static_reference = unsafe {
-    ///     ::ouroboros::macro_help::stable_deref_and_strip_lifetime(&test)
-    /// };
-    /// ```
+    // Returns code which takes a variable with the same name and type as this field and turns it
+    // into a static reference to its dereffed contents. For example, suppose a field
+    // `test: Box<i32>`. This method would generate code that looks like:
+    // ```rust
+    // // Variable name taken from self.illegal_ref_name()
+    // let test_illegal_static_reference = unsafe {
+    //     ::ouroboros::macro_help::stable_deref_and_strip_lifetime(&test)
+    // };
+    // ```
     fn make_illegal_static_reference(&self) -> TokenStream2 {
         let field_name = &self.name;
         let ref_name = self.illegal_ref_name();
@@ -269,6 +269,7 @@ fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<
                         break;
                     }
                 }
+                field.attrs.push(syn::parse_quote! { #[doc(hidden)] });
                 field_info.push(StructFieldInfo {
                     name: field.ident.clone().expect("Named field has no name."),
                     typ: field.ty.clone(),
@@ -342,6 +343,33 @@ fn create_builder_and_constructor(
     generic_args: &Vec<TokenStream2>,
     field_info: &[StructFieldInfo],
 ) -> (TokenStream2, TokenStream2) {
+    let documentation = format!(
+        concat!(
+            "Constructs a new instance of this self-referential struct. (See also ",
+            "[`{0}::build()`]({0}::build)). Each argument is a field of ",
+            "the new struct. Fields that refer to other fields inside the struct are initialized ",
+            "using functions instead of directly passing their value. The arguments are as ",
+            "follows:\n\n| Argument | Suggested Use |\n| --- | --- |\n",
+        ),
+        builder_struct_name.to_string()
+    );
+    let builder_documentation = concat!(
+        "A more verbose but stable way to construct self-referencing structs. It is ",
+        "comparable to using `StructName { field1: value1, field2: value2 }` rather than ",
+        "`StructName::new(value1, value2)`. This has the dual benefit of making your code ",
+        "both easier to refactor and more readable. Call [`build()`](Self::build) to ",
+        "construct the actual struct. The fields of this struct should be used as follows:\n\n",
+        "| Field | Suggested Use |\n| --- | --- |\n",
+    )
+    .to_owned();
+    let build_fn_documentation = format!(
+        concat!(
+            "Calls [`{0}::new()`]({0}::new) using the provided values. This is preferrable over ",
+            "calling `new()` directly for the reasons listed above. "
+        ),
+        struct_name.to_string()
+    );
+    let mut doc_table = "".to_owned();
     let mut code: Vec<TokenStream2> = Vec::new();
     let mut params: Vec<TokenStream2> = Vec::new();
     let mut builder_struct_generic_producers: Vec<_> = generic_params
@@ -367,6 +395,10 @@ fn create_builder_and_constructor(
             }
             builder_struct_fields.push(quote! { #field_name: #plain_type });
             builder_struct_field_names.push(quote! { #field_name });
+            doc_table += &format!(
+                "| `{}` | Directly pass in the value this field should contain |\n",
+                field_name.to_string()
+            );
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
             // contructor, and generic parameters need to be added to the builder struct to make
@@ -376,13 +408,24 @@ fn create_builder_and_constructor(
             // Ok so hear me out basically without this thing here my IDE thinks the rest of the
             // code is a string and it all turns green.
             {}
+            doc_table += &format!(
+                "| `{}` | Use a function or closure: `(",
+                builder_name.to_string()
+            );
             let mut builder_args = Vec::new();
-            for borrow in &field.borrows {
-                builder_args.push(format_ident!(
-                    "{}_illegal_static_reference",
-                    field_info[borrow.index].name
-                ));
+            for (index, borrow) in field.borrows.iter().enumerate() {
+                let borrowed_name = &field_info[borrow.index].name;
+                builder_args.push(format_ident!("{}_illegal_static_reference", borrowed_name));
+                doc_table += &format!(
+                    "{}: &{}_",
+                    borrowed_name.to_string(),
+                    if borrow.mutable { "mut " } else { "" },
+                );
+                if index < field.borrows.len() - 1 {
+                    doc_table += ", ";
+                }
             }
+            doc_table += &format!(") -> {}: _` | \n", field_name.to_string());
             if field.field_type == FieldType::BorrowedMut {
                 // If other fields borrow it mutably, we need to make the variable mutable.
                 code.push(quote! { let mut #field_name = #builder_name (#(#builder_args),*); });
@@ -405,17 +448,22 @@ fn create_builder_and_constructor(
         }
     }
     let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
+    let documentation = documentation + &doc_table;
+    let builder_documentation = builder_documentation + &doc_table;
     let constructor_def = quote! {
+        #[doc=#documentation]
         pub fn new(#(#params),*) -> Self {
             #(#code)*
             Self{ #(#field_names),* }
         }
     };
     let builder_def = quote! {
+        #[doc=#builder_documentation]
         pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
             #(pub #builder_struct_fields),*
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
+            #[doc=#build_fn_documentation]
             pub fn build(self) -> #struct_name <#(#generic_args),*> {
                 #struct_name::new(
                     #(self.#builder_struct_field_names),*
@@ -440,6 +488,52 @@ fn create_try_builder_and_constructor(
         }
     }
 
+    let documentation = format!(
+        concat!(
+            "(See also [`{0}::try_build()`]({0}::try_build).) Like [`new`](Self::new), but ",
+            "builders for [self-referencing fields](ouroboros::self_referencing) ",
+            "can return results. If any of them fail, `Err` is returned. If all of them ",
+            "succeed, `Ok` is returned. The arguments are as follows:\n\n",
+            "| Argument | Suggested Use |\n| --- | --- |\n",
+        ),
+        builder_struct_name.to_string()
+    );
+    let or_recover_documentation = format!(
+        concat!(
+            "(See also [`{0}::try_build_or_recover()`]({0}::try_build_or_recover).) Like ",
+            "[`try_new`](Self::try_new), but all ",
+            "[head fields](ouroboros::self_referencing) ",
+            "are returned in the case of an error. The arguments are as follows:\n\n",
+            "| Argument | Suggested Use |\n| --- | --- |\n",
+        ),
+        builder_struct_name.to_string()
+    );
+    let builder_documentation = concat!(
+        "A more verbose but stable way to construct self-referencing structs. It is ",
+        "comparable to using `StructName { field1: value1, field2: value2 }` rather than ",
+        "`StructName::new(value1, value2)`. This has the dual benefit of makin your code ",
+        "both easier to refactor and more readable. Call [`try_build()`](Self::try_build) or ",
+        "[`try_build_or_recover()`](Self::try_build_or_recover) to ",
+        "construct the actual struct. The fields of this struct should be used as follows:\n\n",
+        "| Field | Suggested Use |\n| --- | --- |\n",
+    )
+    .to_owned();
+    let build_fn_documentation = format!(
+        concat!(
+            "Calls [`{0}::try_new()`]({0}::try_new) using the provided values. This is ",
+            "preferrable over calling `try_new()` directly for the reasons listed above. "
+        ),
+        struct_name.to_string()
+    );
+    let build_or_recover_fn_documentation = format!(
+        concat!(
+            "Calls [`{0}::try_new_or_recover()`]({0}::try_new_or_recover) using the provided ",
+            "values. This is preferrable over calling `try_new_or_recover()` directly for the ",
+            "reasons listed above. "
+        ),
+        struct_name.to_string()
+    );
+    let mut doc_table = "".to_owned();
     let mut code: Vec<TokenStream2> = Vec::new();
     let mut or_recover_code: Vec<TokenStream2> = Vec::new();
     let mut params: Vec<TokenStream2> = Vec::new();
@@ -466,6 +560,10 @@ fn create_try_builder_and_constructor(
             }
             builder_struct_fields.push(quote! { #field_name: #plain_type });
             builder_struct_field_names.push(quote! { #field_name });
+            doc_table += &format!(
+                "| `{}` | Directly pass in the value this field should contain |\n",
+                field_name.to_string()
+            );
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
             // contructor, and generic parameters need to be added to the builder struct to make
@@ -475,13 +573,24 @@ fn create_try_builder_and_constructor(
             // Ok so hear me out basically without this thing here my IDE thinks the rest of the
             // code is a string and it all turns green.
             {}
+            doc_table += &format!(
+                "| `{}` | Use a function or closure: `(",
+                builder_name.to_string()
+            );
             let mut builder_args = Vec::new();
-            for borrow in &field.borrows {
-                builder_args.push(format_ident!(
-                    "{}_illegal_static_reference",
-                    field_info[borrow.index].name
-                ));
+            for (index, borrow) in field.borrows.iter().enumerate() {
+                let borrowed_name = &field_info[borrow.index].name;
+                builder_args.push(format_ident!("{}_illegal_static_reference", borrowed_name));
+                doc_table += &format!(
+                    "{}: &{}_",
+                    borrowed_name.to_string(),
+                    if borrow.mutable { "mut " } else { "" },
+                );
+                if index < field.borrows.len() - 1 {
+                    doc_table += ", ";
+                }
             }
+            doc_table += &format!(") -> Result<{}: _, Error_>` | \n", field_name.to_string());
             let maybe_mut = if field.field_type == FieldType::BorrowedMut {
                 // If other fields borrow this field mutably, we need to make the variable mutable.
                 quote! { mut }
@@ -492,7 +601,7 @@ fn create_try_builder_and_constructor(
             or_recover_code.push(quote! {
                 let #maybe_mut #field_name = match #builder_name (#(#builder_args),*) {
                     ::std::result::Result::Ok(value) => value,
-                    ::std::result::Result::Err(err) 
+                    ::std::result::Result::Err(err)
                         => return ::std::result::Result::Err((err, Heads { #(#head_field_names),* })),
                 };
             });
@@ -514,11 +623,16 @@ fn create_try_builder_and_constructor(
         }
     }
     let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
+    let documentation = documentation + &doc_table;
+    let or_recover_documentation = or_recover_documentation + &doc_table;
+    let builder_documentation = builder_documentation + &doc_table;
     let constructor_def = quote! {
+        #[doc=#documentation]
         pub fn try_new<Error_>(#(#params),*) -> ::std::result::Result<Self, Error_> {
             #(#code)*
             ::std::result::Result::Ok(Self{ #(#field_names),* })
         }
+        #[doc=#or_recover_documentation]
         pub fn try_new_or_recover<Error_>(#(#params),*) -> ::std::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
             ::std::result::Result::Ok(Self{ #(#field_names),* })
@@ -527,15 +641,18 @@ fn create_try_builder_and_constructor(
     builder_struct_generic_producers.push(quote! { Error_ });
     builder_struct_generic_consumers.push(quote! { Error_ });
     let builder_def = quote! {
+        #[doc=#builder_documentation]
         pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
             #(pub #builder_struct_fields),*
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
+            #[doc=#build_fn_documentation]
             pub fn try_build(self) -> Result<#struct_name <#(#generic_args),*>, Error_> {
                 #struct_name::try_new(
                     #(self.#builder_struct_field_names),*
                 )
             }
+            #[doc=#build_or_recover_fn_documentation]
             pub fn try_build_or_recover(self) -> Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
                 #struct_name::try_new_or_recover(
                     #(self.#builder_struct_field_names),*
@@ -555,7 +672,15 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
         // fields in the struct may have borrowed to ensure safety.
         if field.field_type == FieldType::Tail {
             let user_name = format_ident!("use_{}", &field.name);
+            let documentation = format!(
+                concat!(
+                    "Provides an immutable reference to `{0}`. This method was generated because ",
+                    "`{0}` is a [tail field](ouroboros::self_referencing)."
+                ),
+                field.name.to_string()
+            );
             users.push(quote! {
+                #[doc=#documentation]
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> FnOnce(&'outer_borrow #field_type) -> ReturnType,
@@ -565,7 +690,15 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
             });
             // If it is not borrowed at all it's safe to allow mutably borrowing it.
             let user_name = format_ident!("use_{}_mut", &field.name);
+            let documentation = format!(
+                concat!(
+                    "Provides a mutable reference to `{0}`. This method was generated because ",
+                    "`{0}` is a [tail field](ouroboros::self_referencing)."
+                ),
+                field.name.to_string()
+            );
             users.push(quote! {
+                #[doc=#documentation]
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow mut self,
                     user: impl for<'this> FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
@@ -575,7 +708,15 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
             });
         } else if field.field_type == FieldType::Borrowed {
             let user_name = format_ident!("use_{}_contents", &field.name);
+            let documentation = format!(
+                concat!(
+                    "Provides limited immutable access to the contents of `{0}`. This method was ",
+                    "generated because `{0}` is immutably borrowed by other fields."
+                ),
+                field.name.to_string()
+            );
             users.push(quote! {
+                #[doc=#documentation]
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> FnOnce(&'outer_borrow <#field_type as ::std::ops::Deref>::Target) -> ReturnType,
@@ -592,6 +733,7 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
 }
 
 fn make_use_all_function(
+    struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
     generic_args: &Vec<TokenStream2>,
@@ -638,13 +780,40 @@ fn make_use_all_function(
         args
     };
 
+    let struct_documentation = format!(
+        concat!(
+            "A struct for holding immutable references to all ",
+            "[tail and immutably borrowed fields](ouroboros::self_referencing) in an instance of ",
+            "[`{0}`]({0})."
+        ),
+        struct_name.to_string()
+    );
+    let mut_struct_documentation = format!(
+        concat!(
+            "A struct for holding mutable references to all ",
+            "[tail fields](ouroboros::self_referencing) in an instance of ",
+            "[`{0}`]({0})."
+        ),
+        struct_name.to_string()
+    );
     let struct_defs = quote! {
+        #[doc=#struct_documentation]
         pub struct BorrowedFields #new_generic_params { #(#fields),* }
+        #[doc=#mut_struct_documentation]
         pub struct BorrowedMutFields #new_generic_params { #(#mut_fields),* }
     };
     let borrowed_fields_type = quote! { BorrowedFields<#(#new_generic_args),*> };
     let borrowed_mut_fields_type = quote! { BorrowedMutFields<#(#new_generic_args),*> };
+    let documentation = concat!(
+        "This method provides immutable references to all ",
+        "[tail and immutably borrowed fields](ouroboros::self_referencing).",
+    );
+    let mut_documentation = concat!(
+        "This method provides mutable references to all ",
+        "[tail fields](ouroboros::self_referencing).",
+    );
     let fn_defs = quote! {
+        #[doc=#documentation]
         pub fn use_all_fields <'outer_borrow, ReturnType>(
             &'outer_borrow self,
             user: impl for <'this> FnOnce(#borrowed_fields_type) -> ReturnType
@@ -653,6 +822,7 @@ fn make_use_all_function(
                 #(#field_assignments),*
             })
         }
+        #[doc=#mut_documentation]
         pub fn use_all_fields_mut <'outer_borrow, ReturnType>(
             &'outer_borrow mut self,
             user: impl for <'this> FnOnce(#borrowed_mut_fields_type) -> ReturnType
@@ -667,6 +837,7 @@ fn make_use_all_function(
 
 /// Returns the Heads struct and a function to convert the original struct into a Heads instance.
 fn make_into_heads(
+    struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
     generic_args: &Vec<TokenStream2>,
@@ -688,7 +859,15 @@ fn make_into_heads(
             head_fields.push(quote! { pub #field_name: #field_type });
         }
     }
+    let documentation = format!(
+        concat!(
+            "A struct which contains only the ",
+            "[head fields](ouroboros::self_referencing) of [`{0}`]({0})."
+        ),
+        struct_name.to_string()
+    );
     let heads_struct_def = quote! {
+        #[doc=#documentation]
         pub struct Heads #generic_params {
             #(#head_fields),*
         }
@@ -735,9 +914,9 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let users = make_use_functions(&field_info[..]);
     let (use_all_struct_defs, use_all_fn_defs) =
-        make_use_all_function(&field_info[..], &generic_params, &generic_args);
+        make_use_all_function(struct_name, &field_info[..], &generic_params, &generic_args);
     let (heads_struct_def, into_heads_fn) =
-        make_into_heads(&field_info[..], &generic_params, &generic_args);
+        make_into_heads(struct_name, &field_info[..], &generic_params, &generic_args);
 
     TokenStream::from(quote! {
         mod #mod_name {
