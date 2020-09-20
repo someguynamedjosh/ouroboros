@@ -1,15 +1,9 @@
 use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use proc_macro2::{Group, Span, TokenTree};
+use proc_macro2::{Group, TokenTree};
 use quote::{format_ident, quote};
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::token::Comma;
-use syn::{
-    parenthesized, Attribute, Expr, Field, Fields, FieldsUnnamed, GenericParam, Generics, Ident,
-    ItemStruct, Lifetime, LifetimeDef, Token, Type, TypeParam, TypeParamBound, Visibility,
-};
+use syn::{Attribute, Fields, GenericParam, Generics, Ident, ItemStruct, Type};
 
 #[derive(Clone, Copy, PartialEq)]
 enum FieldType {
