@@ -1,6 +1,7 @@
 //! A crate for creating safe self-referencing structs.
 //!
 //! See the documentation for [`#[self_referencing]`](self_referencing) to get started.
+//! See the documentation of [`ouroboros_examples`](https://docs.rs/ouroboros_examples)
 
 /// This macro is used to turn a regular struct into a self-referencing one. An example:
 /// ```rust

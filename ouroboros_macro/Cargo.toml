@@ -1,10 +1,12 @@
 [package]
 name = "ouroboros_macro"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Joshua Maros <joshua-maros@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 description = "Proc macro for ouroboros crate."
+documentation = "https://docs.rs/ouroboros_macro"
+repository = "https://github.com/joshua-maros/ouroboros"
 
 [lib]
 proc-macro = true

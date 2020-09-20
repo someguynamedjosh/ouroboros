@@ -7,7 +7,3 @@ pub struct BoxAndRef {
     #[borrows(data)]
     data_ref: &'this i32,
 }
-
-fn main() {
-
-}

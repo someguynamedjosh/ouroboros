@@ -491,7 +491,7 @@ fn create_try_builder_and_constructor(
     let documentation = format!(
         concat!(
             "(See also [`{0}::try_build()`]({0}::try_build).) Like [`new`](Self::new), but ",
-            "builders for [self-referencing fields](ouroboros::self_referencing) ",
+            "builders for [self-referencing fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions ",
             "can return results. If any of them fail, `Err` is returned. If all of them ",
             "succeed, `Ok` is returned. The arguments are as follows:\n\n",
             "| Argument | Suggested Use |\n| --- | --- |\n",
@@ -502,7 +502,7 @@ fn create_try_builder_and_constructor(
         concat!(
             "(See also [`{0}::try_build_or_recover()`]({0}::try_build_or_recover).) Like ",
             "[`try_new`](Self::try_new), but all ",
-            "[head fields](ouroboros::self_referencing) ",
+            "[head fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions ",
             "are returned in the case of an error. The arguments are as follows:\n\n",
             "| Argument | Suggested Use |\n| --- | --- |\n",
         ),
@@ -675,7 +675,7 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
             let documentation = format!(
                 concat!(
                     "Provides an immutable reference to `{0}`. This method was generated because ",
-                    "`{0}` is a [tail field](ouroboros::self_referencing)."
+                    "`{0}` is a [tail field](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions."
                 ),
                 field.name.to_string()
             );
@@ -693,7 +693,7 @@ fn make_use_functions(field_info: &[StructFieldInfo]) -> Vec<TokenStream2> {
             let documentation = format!(
                 concat!(
                     "Provides a mutable reference to `{0}`. This method was generated because ",
-                    "`{0}` is a [tail field](ouroboros::self_referencing)."
+                    "`{0}` is a [tail field](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions."
                 ),
                 field.name.to_string()
             );
@@ -783,7 +783,7 @@ fn make_use_all_function(
     let struct_documentation = format!(
         concat!(
             "A struct for holding immutable references to all ",
-            "[tail and immutably borrowed fields](ouroboros::self_referencing) in an instance of ",
+            "[tail and immutably borrowed fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions in an instance of ",
             "[`{0}`]({0})."
         ),
         struct_name.to_string()
@@ -791,7 +791,7 @@ fn make_use_all_function(
     let mut_struct_documentation = format!(
         concat!(
             "A struct for holding mutable references to all ",
-            "[tail fields](ouroboros::self_referencing) in an instance of ",
+            "[tail fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions in an instance of ",
             "[`{0}`]({0})."
         ),
         struct_name.to_string()
@@ -806,11 +806,11 @@ fn make_use_all_function(
     let borrowed_mut_fields_type = quote! { BorrowedMutFields<#(#new_generic_args),*> };
     let documentation = concat!(
         "This method provides immutable references to all ",
-        "[tail and immutably borrowed fields](ouroboros::self_referencing).",
+        "[tail and immutably borrowed fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions.",
     );
     let mut_documentation = concat!(
         "This method provides mutable references to all ",
-        "[tail fields](ouroboros::self_referencing).",
+        "[tail fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions.",
     );
     let fn_defs = quote! {
         #[doc=#documentation]
@@ -862,7 +862,7 @@ fn make_into_heads(
     let documentation = format!(
         concat!(
             "A struct which contains only the ",
-            "[head fields](ouroboros::self_referencing) of [`{0}`]({0})."
+            "[head fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions of [`{0}`]({0})."
         ),
         struct_name.to_string()
     );
