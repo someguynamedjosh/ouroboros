@@ -1,9 +1,9 @@
 use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use proc_macro2::{Group, TokenTree};
+use proc_macro2::{Group, Span, TokenTree};
 use quote::{format_ident, quote};
-use syn::{Attribute, Fields, GenericParam, Generics, Ident, ItemStruct, Type};
+use syn::{Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, Type};
 
 #[derive(Clone, Copy, PartialEq)]
 enum FieldType {
@@ -159,24 +159,25 @@ fn handle_borrows_attr(
     field_info: &mut [StructFieldInfo],
     attr: &Attribute,
     borrows: &mut Vec<BorrowRequest>,
-) {
+) -> Result<(), Error> {
     let mut borrow_mut = false;
     let mut waiting_for_comma = false;
     let tokens = attr.tokens.clone();
+    let possible_error = Error::new_spanned(&tokens, "Invalid syntax for borrows() macro.");
     let tokens = if let Some(TokenTree::Group(group)) = tokens.into_iter().next() {
         group.stream()
     } else {
-        panic!("Invalid syntax for borrows() macro.");
+        return Err(possible_error);
     };
     for token in tokens {
         if let TokenTree::Ident(ident) = token {
             if waiting_for_comma {
-                panic!("Unexpected '{}', expected comma.", ident);
+                return Err(Error::new_spanned(&ident, "Expected comma."));
             }
             let istr = ident.to_string();
             if istr == "mut" {
                 if borrow_mut {
-                    panic!("Unexpected double 'mut' in borrows() macro.");
+                    return Err(Error::new_spanned(&ident, "Unexpected double 'mut'"));
                 }
                 borrow_mut = true;
             } else {
@@ -184,31 +185,31 @@ fn handle_borrows_attr(
                 let index = if let Some(v) = index {
                     v
                 } else {
-                    panic!(
+                    return Err(Error::new_spanned(
+                        &ident,
                         concat!(
-                            "Unknown identifier '{}', make sure that it is spelled ",
+                            "Unknown identifier, make sure that it is spelled ",
                             "correctly and defined above the location it is borrowed."
                         ),
-                        istr
-                    );
+                    ));
                 };
                 if borrow_mut {
                     if field_info[index].field_type == FieldType::Borrowed {
-                        panic!(
-                            "Cannot borrow '{}' as mut as it was previously borrowed immutably.",
-                            istr,
-                        );
+                        return Err(Error::new_spanned(
+                            &ident,
+                            "Cannot borrow mutably, this field was previously borrowed immutably.",
+                        ));
                     }
                     if field_info[index].field_type == FieldType::BorrowedMut {
-                        panic!("Cannot borrow '{}' mutably more than once.", istr,)
+                        return Err(Error::new_spanned(&ident, "Cannot borrow mutably twice."));
                     }
                     field_info[index].field_type = FieldType::BorrowedMut;
                 } else {
                     if field_info[index].field_type == FieldType::BorrowedMut {
-                        panic!(
-                            "Cannot borrow '{}' again as it was previously borrowed mutably.",
-                            istr,
-                        );
+                        return Err(Error::new_spanned(
+                            &ident,
+                            "Cannot borrow as immutable as it was previously borrowed mutably.",
+                        ));
                     }
                     field_info[index].field_type = FieldType::Borrowed;
                 }
@@ -224,24 +225,30 @@ fn handle_borrows_attr(
                 if waiting_for_comma {
                     waiting_for_comma = false;
                 } else {
-                    panic!("Unexpected extra comma in borrows() macro.");
+                    return Err(Error::new_spanned(&punct, "Unexpected extra comma."));
                 }
             } else {
-                panic!(
-                    "Unexpected punctuation {}, expected comma or identifier.",
-                    punct
-                );
+                return Err(Error::new_spanned(
+                    &punct,
+                    "Unexpected punctuation, expected comma or identifier.",
+                ));
             }
         } else {
-            panic!("Unexpected token {}, expected comma or identifier.", token);
+            return Err(Error::new_spanned(
+                &token,
+                "Unexpected token, expected comma or identifier.",
+            ));
         }
     }
+    Ok(())
 }
 
 /// Creates the struct that will actually store the data. This involves properly organizing the
 /// fields, collecting metadata about them, reversing the order everything is stored in, and
 /// converting any uses of 'this to 'static.
-fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<StructFieldInfo>) {
+fn create_actual_struct(
+    original_struct_def: &ItemStruct,
+) -> Result<(TokenStream2, Vec<StructFieldInfo>), Error> {
     let mut actual_struct_def = original_struct_def.clone();
     actual_struct_def.vis = syn::parse_quote! { pub };
     let mut field_info = Vec::new();
@@ -258,7 +265,7 @@ fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<
                         continue;
                     }
                     if path.segments.first().unwrap().ident.to_string() == "borrows" {
-                        handle_borrows_attr(&mut field_info[..], attr, &mut borrows);
+                        handle_borrows_attr(&mut field_info[..], attr, &mut borrows)?;
                         field.attrs.remove(index);
                         break;
                     }
@@ -272,11 +279,24 @@ fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<
                 });
             }
         }
-        Fields::Unnamed(_fields) => unimplemented!("Tuple structs are not supported yet."),
-        Fields::Unit => panic!("Unit structs cannot be self-referential."),
+        Fields::Unnamed(_fields) => {
+            return Err(Error::new(
+                Span::call_site(),
+                "Tuple structs are not supported yet.",
+            ))
+        }
+        Fields::Unit => {
+            return Err(Error::new(
+                Span::call_site(),
+                "Unit structs cannot be self-referential.",
+            ))
+        }
     }
     if field_info.len() < 2 {
-        panic!("Self-referencing structs must have at least 2 fields.");
+        return Err(Error::new(
+            Span::call_site(),
+            "Self-referencing structs must have at least 2 fields.",
+        ));
     }
     let mut has_non_tail = false;
     for field in &field_info {
@@ -286,13 +306,16 @@ fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<
         }
     }
     if !has_non_tail {
-        panic!(
-            concat!(
-                "Self-referencing struct cannot be made entirely of tail fields, try adding ",
-                "#[borrows({0})] to a field defined after {0}."
+        return Err(Error::new(
+            Span::call_site(),
+            &format!(
+                concat!(
+                    "Self-referencing struct cannot be made entirely of tail fields, try adding ",
+                    "#[borrows({0})] to a field defined after {0}."
+                ),
+                field_info[0].name
             ),
-            field_info[0].name
-        );
+        ));
     }
     // Reverse the order of all fields. We ensure that items in the struct are only dependent
     // on references to items above them. Rust drops items in a struct in forward declaration order.
@@ -302,13 +325,13 @@ fn create_actual_struct(original_struct_def: &ItemStruct) -> (TokenStream2, Vec<
             let reversed = fields.named.iter().rev().cloned().collect();
             fields.named = reversed;
         }
-        Fields::Unnamed(_fields) => unimplemented!("Tuple structs are not supported yet."),
-        Fields::Unit => panic!("Unit structs cannot be self-referential."),
+        Fields::Unnamed(_fields) => unreachable!("Error handled earlier."),
+        Fields::Unit => unreachable!("Error handled earlier."),
     }
     // Finally, replace the fake 'this lifetime with 'static.
     let actual_struct_def = replace_this_with_static(quote! { #actual_struct_def });
 
-    (actual_struct_def, field_info)
+    Ok((actual_struct_def, field_info))
 }
 
 // Takes the generics parameters from the original struct and turns them into arguments.
@@ -866,7 +889,12 @@ fn make_into_heads(
             #(#head_fields),*
         }
     };
+    let documentation = concat!(
+        "This function drops all internally referencing fields and returns only the ",
+        "[head fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions) of this struct."
+    ).to_owned();
     let into_heads_fn = quote! {
+        #[doc=#documentation]
         pub fn into_heads(self) -> Heads<#(#generic_args),*> {
             #(#code)*
             Heads {
@@ -877,14 +905,12 @@ fn make_into_heads(
     (heads_struct_def, into_heads_fn)
 }
 
-#[proc_macro_attribute]
-pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
+fn self_referencing_impl(original_struct_def: ItemStruct) -> Result<TokenStream, Error> {
     let struct_name = &original_struct_def.ident;
     let mod_name = format_ident!("ouroboros_impl_{}", struct_name.to_string().to_snake_case());
     let visibility = &original_struct_def.vis;
 
-    let (actual_struct_def, field_info) = create_actual_struct(&original_struct_def);
+    let (actual_struct_def, field_info) = create_actual_struct(&original_struct_def)?;
 
     let generic_params = original_struct_def.generics.clone();
     let generic_args = make_generic_arguments(&generic_params);
@@ -912,7 +938,7 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let (heads_struct_def, into_heads_fn) =
         make_into_heads(struct_name, &field_info[..], &generic_params, &generic_args);
 
-    TokenStream::from(quote! {
+    Ok(TokenStream::from(quote! {
         mod #mod_name {
             use super::*;
             #actual_struct_def
@@ -931,5 +957,14 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #visibility use #mod_name :: #struct_name;
         #visibility use #mod_name :: #builder_struct_name;
         #visibility use #mod_name :: #try_builder_struct_name;
-    })
+    }))
+}
+
+#[proc_macro_attribute]
+pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
+    match self_referencing_impl(original_struct_def) {
+        Ok(content) => content,
+        Err(err) => err.to_compile_error().into(),
+    }
 }
