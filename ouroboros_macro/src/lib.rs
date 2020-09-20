@@ -914,6 +914,7 @@ pub fn self_referencing(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         mod #mod_name {
+            use super::*;
             #actual_struct_def
             #builder_def
             #try_builder_def
