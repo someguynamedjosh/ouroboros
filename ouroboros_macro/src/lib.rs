@@ -89,8 +89,8 @@ enum ArgType {
     TraitBound(TokenStream2),
 }
 
-fn deref_type(field_type: &Type, use_chain_hack: bool) -> Result<TokenStream2, Error> {
-    if use_chain_hack {
+fn deref_type(field_type: &Type, do_chain_hack: bool) -> Result<TokenStream2, Error> {
+    if do_chain_hack {
         if let Type::Path(tpath) = field_type {
             if let Some(segment) = tpath.path.segments.last() {
                 if segment.ident.to_string() == "Box" {
@@ -118,7 +118,7 @@ fn make_constructor_arg_type_impl(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
     make_builder_return_type: impl FnOnce() -> TokenStream2,
-    use_chain_hack: bool,
+    do_chain_hack: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
     if for_field.borrows.len() == 0 {
@@ -129,14 +129,14 @@ fn make_constructor_arg_type_impl(
             if borrow.mutable {
                 let field = &other_fields[borrow.index];
                 let field_type = &field.typ;
-                let content_type = deref_type(field_type, use_chain_hack)?;
+                let content_type = deref_type(field_type, do_chain_hack)?;
                 field_builder_params.push(quote! {
                     &'this mut #content_type
                 });
             } else {
                 let field = &other_fields[borrow.index];
                 let field_type = &field.typ;
-                let content_type = deref_type(field_type, use_chain_hack)?;
+                let content_type = deref_type(field_type, do_chain_hack)?;
                 field_builder_params.push(quote! {
                     &'this #content_type
                 });
@@ -153,14 +153,14 @@ fn make_constructor_arg_type_impl(
 fn make_constructor_arg_type(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
-    use_chain_hack: bool,
+    do_chain_hack: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
     make_constructor_arg_type_impl(
         for_field,
         other_fields,
         || quote! { #field_type },
-        use_chain_hack,
+        do_chain_hack,
     )
 }
 
@@ -168,14 +168,14 @@ fn make_constructor_arg_type(
 fn make_try_constructor_arg_type(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
-    use_chain_hack: bool,
+    do_chain_hack: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
     make_constructor_arg_type_impl(
         for_field,
         other_fields,
         || quote! { Result<#field_type, Error_> },
-        use_chain_hack,
+        do_chain_hack,
     )
 }
 
@@ -403,7 +403,7 @@ fn create_builder_and_constructor(
     generic_params: &Generics,
     generic_args: &Vec<TokenStream2>,
     field_info: &[StructFieldInfo],
-    use_chain_hack: bool,
+    do_chain_hack: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let documentation = format!(
         concat!(
@@ -448,7 +448,7 @@ fn create_builder_and_constructor(
     for field in field_info {
         let field_name = &field.name;
 
-        let arg_type = make_constructor_arg_type(&field, &field_info[..], use_chain_hack)?;
+        let arg_type = make_constructor_arg_type(&field, &field_info[..], do_chain_hack)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -538,7 +538,7 @@ fn create_try_builder_and_constructor(
     generic_params: &Generics,
     generic_args: &Vec<TokenStream2>,
     field_info: &[StructFieldInfo],
-    use_chain_hack: bool,
+    do_chain_hack: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let mut head_recover_code = Vec::new();
     for field in field_info {
@@ -613,7 +613,7 @@ fn create_try_builder_and_constructor(
     for field in field_info {
         let field_name = &field.name;
 
-        let arg_type = make_try_constructor_arg_type(&field, &field_info[..], use_chain_hack)?;
+        let arg_type = make_try_constructor_arg_type(&field, &field_info[..], do_chain_hack)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -726,9 +726,9 @@ fn create_try_builder_and_constructor(
     Ok((builder_def, constructor_def))
 }
 
-fn make_use_functions(
+fn make_with_functions(
     field_info: &[StructFieldInfo],
-    use_chain_hack: bool,
+    do_chain_hack: bool,
 ) -> Result<Vec<TokenStream2>, Error> {
     let mut users = Vec::new();
     for field in field_info {
@@ -737,7 +737,7 @@ fn make_use_functions(
         // If the field is not a tail, we need to serve up the same kind of reference that other
         // fields in the struct may have borrowed to ensure safety.
         if field.field_type == FieldType::Tail {
-            let user_name = format_ident!("use_{}", &field.name);
+            let user_name = format_ident!("with_{}", &field.name);
             let documentation = format!(
                 concat!(
                     "Provides an immutable reference to `{0}`. This method was generated because ",
@@ -755,7 +755,7 @@ fn make_use_functions(
                 }
             });
             // If it is not borrowed at all it's safe to allow mutably borrowing it.
-            let user_name = format_ident!("use_{}_mut", &field.name);
+            let user_name = format_ident!("with_{}_mut", &field.name);
             let documentation = format!(
                 concat!(
                     "Provides a mutable reference to `{0}`. This method was generated because ",
@@ -773,7 +773,7 @@ fn make_use_functions(
                 }
             });
         } else if field.field_type == FieldType::Borrowed {
-            let user_name = format_ident!("use_{}_contents", &field.name);
+            let user_name = format_ident!("with_{}_contents", &field.name);
             let documentation = format!(
                 concat!(
                     "Provides limited immutable access to the contents of `{0}`. This method was ",
@@ -781,7 +781,7 @@ fn make_use_functions(
                 ),
                 field.name.to_string()
             );
-            let content_type = deref_type(field_type, use_chain_hack)?;
+            let content_type = deref_type(field_type, do_chain_hack)?;
             users.push(quote! {
                 #[doc=#documentation]
                 pub fn #user_name <'outer_borrow, ReturnType>(
@@ -799,12 +799,12 @@ fn make_use_functions(
     Ok(users)
 }
 
-fn make_use_all_function(
+fn make_with_all_function(
     struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
     generic_args: &Vec<TokenStream2>,
-    use_chain_hack: bool,
+    do_chain_hack: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let mut fields = Vec::new();
     let mut field_assignments = Vec::new();
@@ -821,7 +821,7 @@ fn make_use_all_function(
             mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
             let value_name = format_ident!("{}_contents", field_name);
-            let content_type = deref_type(field_type, use_chain_hack)?;
+            let content_type = deref_type(field_type, do_chain_hack)?;
             fields.push(quote! { pub #value_name: &'outer_borrow #content_type });
             field_assignments.push(quote! { #value_name: &*self.#field_name });
         } else if field.field_type == FieldType::BorrowedMut {
@@ -883,7 +883,7 @@ fn make_use_all_function(
     );
     let fn_defs = quote! {
         #[doc=#documentation]
-        pub fn use_all_fields <'outer_borrow, ReturnType>(
+        pub fn with <'outer_borrow, ReturnType>(
             &'outer_borrow self,
             user: impl for <'this> FnOnce(#borrowed_fields_type) -> ReturnType
         ) -> ReturnType {
@@ -892,7 +892,7 @@ fn make_use_all_function(
             })
         }
         #[doc=#mut_documentation]
-        pub fn use_all_fields_mut <'outer_borrow, ReturnType>(
+        pub fn with_mut <'outer_borrow, ReturnType>(
             &'outer_borrow mut self,
             user: impl for <'this> FnOnce(#borrowed_mut_fields_type) -> ReturnType
         ) -> ReturnType {
@@ -959,7 +959,7 @@ fn make_into_heads(
 
 fn self_referencing_impl(
     original_struct_def: ItemStruct,
-    use_chain_hack: bool,
+    do_chain_hack: bool,
 ) -> Result<TokenStream, Error> {
     let struct_name = &original_struct_def.ident;
     let mod_name = format_ident!("ouroboros_impl_{}", struct_name.to_string().to_snake_case());
@@ -977,7 +977,7 @@ fn self_referencing_impl(
         &generic_params,
         &generic_args,
         &field_info[..],
-        use_chain_hack,
+        do_chain_hack,
     )?;
     let try_builder_struct_name = format_ident!("{}TryBuilder", struct_name);
     let (try_builder_def, try_constructor_def) = create_try_builder_and_constructor(
@@ -986,16 +986,16 @@ fn self_referencing_impl(
         &generic_params,
         &generic_args,
         &field_info[..],
-        use_chain_hack,
+        do_chain_hack,
     )?;
 
-    let users = make_use_functions(&field_info[..], use_chain_hack)?;
-    let (use_all_struct_defs, use_all_fn_defs) = make_use_all_function(
+    let users = make_with_functions(&field_info[..], do_chain_hack)?;
+    let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(
         struct_name,
         &field_info[..],
         &generic_params,
         &generic_args,
-        use_chain_hack,
+        do_chain_hack,
     )?;
     let (heads_struct_def, into_heads_fn) =
         make_into_heads(struct_name, &field_info[..], &generic_params, &generic_args);
@@ -1006,13 +1006,13 @@ fn self_referencing_impl(
             #actual_struct_def
             #builder_def
             #try_builder_def
-            #use_all_struct_defs
+            #with_all_struct_defs
             #heads_struct_def
             impl #generic_params #struct_name <#(#generic_args),*> {
                 #constructor_def
                 #try_constructor_def
                 #(#users)*
-                #use_all_fn_defs
+                #with_all_fn_defs
                 #into_heads_fn
             }
         }
@@ -1024,11 +1024,11 @@ fn self_referencing_impl(
 
 #[proc_macro_attribute]
 pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut use_chain_hack = false;
+    let mut do_chain_hack = false;
     for token in <TokenStream as std::convert::Into<TokenStream2>>::into(attr).into_iter() {
         if let TokenTree::Ident(ident) = token {
             match &ident.to_string()[..] {
-                "chain_hack" => use_chain_hack = true,
+                "chain_hack" => do_chain_hack = true,
                 _ => {
                     return Error::new_spanned(&ident, "Unknown identifier, expected 'chain_hack'.")
                         .to_compile_error()
@@ -1042,7 +1042,7 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
-    match self_referencing_impl(original_struct_def, use_chain_hack) {
+    match self_referencing_impl(original_struct_def, do_chain_hack) {
         Ok(content) => content,
         Err(err) => err.to_compile_error().into(),
     }

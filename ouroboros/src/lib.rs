@@ -27,16 +27,16 @@
 ///     }.build();
 ///
 ///     // Prints 42
-///     println!("{:?}", my_value.use_int_data_contents(|int_data| *int_data));
+///     println!("{:?}", my_value.with_int_data_contents(|int_data| *int_data));
 ///     // Prints 3.14
-///     println!("{:?}", my_value.use_float_reference(|float_reference| **float_reference));
+///     println!("{:?}", my_value.with_float_reference(|float_reference| **float_reference));
 ///     // Sets the value of float_data to 84.0
-///     my_value.use_all_fields_mut(|fields| {
+///     my_value.with_mut(|fields| {
 ///         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
 ///     });
 ///
 ///     // We can hold on to this reference...
-///     let int_ref = my_value.use_int_reference(|int_ref| *int_ref);
+///     let int_ref = my_value.with_int_reference(|int_ref| *int_ref);
 ///     println!("{:?}", *int_ref);
 ///     // As long as the struct is still alive.
 ///     drop(my_value);
@@ -109,7 +109,7 @@
 ///         mutable: Box::new(20),
 ///         complex_data_builder: |i: &i32, m: &mut i32| ComplexData::new(i, m, 12345),
 ///     }.build();
-///     data_storage.use_complex_data_mut(|data| {
+///     data_storage.with_complex_data_mut(|data| {
 ///         // Copies the value in immutable into mutable.
 ///         data.transfer();
 ///         // Prints 10
@@ -158,24 +158,24 @@
 /// Similar to the `try_new()` function, except that all the **head fields** are returned along side
 /// the original error in case of an error. The preferred way to use this function is through
 /// `MyStructTryBuilder` and its `try_build_or_recover()` function.
-/// ### `MyStruct::use_FIELD<R>(&self, user: FnOnce(field: &FieldType) -> R) -> R`
+/// ### `MyStruct::with_FIELD<R>(&self, user: FnOnce(field: &FieldType) -> R) -> R`
 /// This function is generated for every **tail field** in your struct. It allows safely accessing
 /// a reference to that value. The function generates the reference and passes it to `user`. You
 /// can do anything you want with the reference, it is constructed to not outlive the struct.
-/// ### `MyStruct::use_FIELD_mut<R>(&mut self, user: FnOnce(field: &mut FieldType) -> R) -> R`
+/// ### `MyStruct::with_FIELD_mut<R>(&mut self, user: FnOnce(field: &mut FieldType) -> R) -> R`
 /// This function is generated for every **tail field** in your struct. It is the mutable version
-/// of `use_FIELD`.
-/// ### `MyStruct::use_FIELD_contents<R>(&self, user: FnOnce(data: &<FieldType as Deref>::Target) -> R) -> R`
+/// of `with_FIELD`.
+/// ### `MyStruct::with_FIELD_contents<R>(&self, user: FnOnce(data: &<FieldType as Deref>::Target) -> R) -> R`
 /// This function is generated for every **immutably borrowed field** In your struct. It allows
-/// accessing the contents of that field. It is similar to `use_FIELD` except that it provides
+/// accessing the contents of that field. It is similar to `with_FIELD` except that it provides
 /// a reference to the field's content, not the field itself. E.G. a field of type `Box<i32>` would
 /// cause this function to provide a reference of type `&i32`. There is no mutable version of this
 /// function because if a field is already borrowed, it cannot be mutably borrowed safely.
-/// ### `MyStruct::use_all_fields<R>(&self, user: FnOnce(fields: AllFields) -> R) -> R`
+/// ### `MyStruct::with<R>(&self, user: FnOnce(fields: AllFields) -> R) -> R`
 /// Allows borrowing all **tail and immutably-borrowed fields** at once. Functions similarly to
-/// `use_FIELD`.
-/// ### `MyStruct::use_all_fields_mut<R>(&self, user: FnOnce(fields: AllFields) -> R) -> R`
-/// Allows mutably borrowing all **tail fields** at once. Functions similarly to `use_FIELD_mut`.
+/// `with_FIELD`.
+/// ### `MyStruct::with_mut<R>(&self, user: FnOnce(fields: AllFields) -> R) -> R`
+/// Allows mutably borrowing all **tail fields** at once. Functions similarly to `with_FIELD_mut`.
 /// ### `MyStruct::into_heads(self) -> Heads`
 /// Drops all self-referencing fields and returns a struct containing all **head fields**.
 pub use ouroboros_macro::self_referencing;

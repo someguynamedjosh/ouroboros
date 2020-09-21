@@ -34,16 +34,16 @@ fn main() {
     }.build();
 
     // Prints 42
-    println!("{:?}", my_value.use_int_data_contents(|int_data| *int_data));
+    println!("{:?}", my_value.with_int_data_contents(|int_data| *int_data));
     // Prints 3.14
-    println!("{:?}", my_value.use_float_reference(|float_reference| **float_reference));
+    println!("{:?}", my_value.with_float_reference(|float_reference| **float_reference));
     // Sets the value of float_data to 84.0
-    my_value.use_all_fields_mut(|fields| {
+    my_value.with_mut(|fields| {
         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
     });
 
     // We can hold on to this reference...
-    let int_ref = my_value.use_int_reference(|int_ref| *int_ref);
+    let int_ref = my_value.with_int_reference(|int_ref| *int_ref);
     println!("{:?}", *int_ref);
     // As long as the struct is still alive.
     drop(my_value);
