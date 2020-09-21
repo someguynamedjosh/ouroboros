@@ -50,7 +50,9 @@ impl StructFieldInfo {
     // ```rust
     // // Variable name taken from self.illegal_ref_name()
     // let test_illegal_static_reference = unsafe {
-    //     ::ouroboros::macro_help::stable_deref_and_strip_lifetime(&test)
+    //     ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
+    //         &((*result.as_ptr()).field)
+    //     )
     // };
     // ```
     fn make_illegal_static_reference(&self) -> TokenStream2 {
@@ -58,7 +60,9 @@ impl StructFieldInfo {
         let ref_name = self.illegal_ref_name();
         quote! {
             let #ref_name = unsafe {
-                ::ouroboros::macro_help::stable_deref_and_strip_lifetime(&#field_name)
+                ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
+                    &((*result.as_ptr()).#field_name)
+                )
             };
         }
     }
@@ -69,7 +73,9 @@ impl StructFieldInfo {
         let ref_name = self.illegal_ref_name();
         quote! {
             let #ref_name = unsafe {
-                ::ouroboros::macro_help::stable_deref_and_strip_lifetime_mut(&mut #field_name)
+                ::ouroboros::macro_help::stable_deref_and_strip_lifetime_mut(
+                    &mut ((*result.as_mut_ptr()).#field_name)
+                )
             };
         }
     }
@@ -437,18 +443,15 @@ fn create_builder_and_constructor(
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
+    code.push(quote! { let mut result = ::std::mem::MaybeUninit::<Self>::uninit(); });
+
     for field in field_info {
         let field_name = &field.name;
 
         let arg_type = make_constructor_arg_type(&field, &field_info[..], use_chain_hack)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
-            if field.field_type == FieldType::BorrowedMut {
-                // If other fields borrow it mutably, we need to make the argument mutable.
-                params.push(quote! { mut #field_name: #plain_type });
-            } else {
-                params.push(quote! { #field_name: #plain_type });
-            }
+            params.push(quote! { #field_name: #plain_type });
             builder_struct_fields.push(quote! { #field_name: #plain_type });
             builder_struct_field_names.push(quote! { #field_name });
             doc_table += &format!(
@@ -482,12 +485,7 @@ fn create_builder_and_constructor(
                 }
             }
             doc_table += &format!(") -> {}: _` | \n", field_name.to_string());
-            if field.field_type == FieldType::BorrowedMut {
-                // If other fields borrow it mutably, we need to make the variable mutable.
-                code.push(quote! { let mut #field_name = #builder_name (#(#builder_args),*); });
-            } else {
-                code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
-            }
+            code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
             let generic_type_name =
                 format_ident!("{}Builder_", field_name.to_string().to_class_case());
 
@@ -496,6 +494,11 @@ fn create_builder_and_constructor(
             builder_struct_fields.push(quote! { #builder_name: #generic_type_name });
             builder_struct_field_names.push(quote! { #builder_name });
         }
+        let field_type = &field.typ;
+        let field_type = replace_this_with_static(quote! { #field_type });
+        code.push(quote! { unsafe {
+            ((&mut (*result.as_mut_ptr()).#field_name) as *mut #field_type).write(#field_name);
+        }});
 
         if field.field_type == FieldType::Borrowed {
             code.push(field.make_illegal_static_reference());
@@ -503,14 +506,13 @@ fn create_builder_and_constructor(
             code.push(field.make_illegal_static_mut_reference());
         }
     }
-    let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
     let documentation = documentation + &doc_table;
     let builder_documentation = builder_documentation + &doc_table;
     let constructor_def = quote! {
         #[doc=#documentation]
         pub fn new(#(#params),*) -> Self {
             #(#code)*
-            Self{ #(#field_names),* }
+            unsafe { result.assume_init() }
         }
     };
     let builder_def = quote! {
@@ -538,12 +540,14 @@ fn create_try_builder_and_constructor(
     field_info: &[StructFieldInfo],
     use_chain_hack: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
-    let mut head_field_names = Vec::new();
+    let mut head_recover_code = Vec::new();
     for field in field_info {
         if field.borrows.len() == 0 {
-            head_field_names.push(&field.name);
+            let field_name = &field.name;
+            head_recover_code.push(quote! { #field_name });
         }
     }
+    let mut current_head_index = 0;
 
     let documentation = format!(
         concat!(
@@ -603,24 +607,26 @@ fn create_try_builder_and_constructor(
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
+    code.push(quote! { let mut result = ::std::mem::MaybeUninit::<Self>::uninit(); });
+    or_recover_code.push(quote! { let mut result = ::std::mem::MaybeUninit::<Self>::uninit(); });
+
     for field in field_info {
         let field_name = &field.name;
 
         let arg_type = make_try_constructor_arg_type(&field, &field_info[..], use_chain_hack)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
-            if field.field_type == FieldType::BorrowedMut {
-                // If other fields borrow it mutably, we need to make the argument mutable.
-                params.push(quote! { mut #field_name: #plain_type });
-            } else {
-                params.push(quote! { #field_name: #plain_type });
-            }
+            params.push(quote! { #field_name: #plain_type });
             builder_struct_fields.push(quote! { #field_name: #plain_type });
             builder_struct_field_names.push(quote! { #field_name });
             doc_table += &format!(
                 "| `{}` | Directly pass in the value this field should contain |\n",
                 field_name.to_string()
             );
+            head_recover_code[current_head_index] = quote! {
+                #field_name: unsafe { ::std::ptr::read(&(*result.as_ptr()).#field_name as *const _) }
+            };
+            current_head_index += 1;
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
             // contructor, and generic parameters need to be added to the builder struct to make
@@ -648,18 +654,12 @@ fn create_try_builder_and_constructor(
                 }
             }
             doc_table += &format!(") -> Result<{}: _, Error_>` | \n", field_name.to_string());
-            let maybe_mut = if field.field_type == FieldType::BorrowedMut {
-                // If other fields borrow this field mutably, we need to make the variable mutable.
-                quote! { mut }
-            } else {
-                quote! {}
-            };
-            code.push(quote! { let #maybe_mut #field_name = #builder_name (#(#builder_args),*)?; });
+            code.push(quote! { let #field_name = #builder_name (#(#builder_args),*)?; });
             or_recover_code.push(quote! {
-                let #maybe_mut #field_name = match #builder_name (#(#builder_args),*) {
+                let #field_name = match #builder_name (#(#builder_args),*) {
                     ::std::result::Result::Ok(value) => value,
                     ::std::result::Result::Err(err)
-                        => return ::std::result::Result::Err((err, Heads { #(#head_field_names),* })),
+                        => return ::std::result::Result::Err((err, Heads { #(#head_recover_code),* })),
                 };
             });
             let generic_type_name =
@@ -670,6 +670,13 @@ fn create_try_builder_and_constructor(
             builder_struct_fields.push(quote! { #builder_name: #generic_type_name });
             builder_struct_field_names.push(quote! { #builder_name });
         }
+        let field_type = &field.typ;
+        let field_type = replace_this_with_static(quote! { #field_type });
+        let line = quote! { unsafe {
+            ((&mut (*result.as_mut_ptr()).#field_name) as *mut #field_type).write(#field_name);
+        }};
+        code.push(line.clone());
+        or_recover_code.push(line);
 
         if field.field_type == FieldType::Borrowed {
             code.push(field.make_illegal_static_reference());
@@ -679,7 +686,6 @@ fn create_try_builder_and_constructor(
             or_recover_code.push(field.make_illegal_static_mut_reference());
         }
     }
-    let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
     let documentation = documentation + &doc_table;
     let or_recover_documentation = or_recover_documentation + &doc_table;
     let builder_documentation = builder_documentation + &doc_table;
@@ -687,12 +693,12 @@ fn create_try_builder_and_constructor(
         #[doc=#documentation]
         pub fn try_new<Error_>(#(#params),*) -> ::std::result::Result<Self, Error_> {
             #(#code)*
-            ::std::result::Result::Ok(Self{ #(#field_names),* })
+            ::std::result::Result::Ok(unsafe { result.assume_init() })
         }
         #[doc=#or_recover_documentation]
         pub fn try_new_or_recover<Error_>(#(#params),*) -> ::std::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
-            ::std::result::Result::Ok(Self{ #(#field_names),* })
+            ::std::result::Result::Ok(unsafe { result.assume_init() })
         }
     };
     builder_struct_generic_producers.push(quote! { Error_ });
