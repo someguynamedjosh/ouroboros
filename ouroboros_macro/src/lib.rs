@@ -595,7 +595,6 @@ fn create_try_builder_and_constructor(
         struct_name.to_string()
     );
     let mut doc_table = "".to_owned();
-    let mut code: Vec<TokenStream2> = Vec::new();
     let mut or_recover_code: Vec<TokenStream2> = Vec::new();
     let mut params: Vec<TokenStream2> = Vec::new();
     let mut builder_struct_generic_producers: Vec<_> = generic_params
@@ -607,7 +606,6 @@ fn create_try_builder_and_constructor(
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
-    code.push(quote! { let mut result = ::std::mem::MaybeUninit::<Self>::uninit(); });
     or_recover_code.push(quote! { let mut result = ::std::mem::MaybeUninit::<Self>::uninit(); });
 
     for field in field_info {
@@ -654,7 +652,6 @@ fn create_try_builder_and_constructor(
                 }
             }
             doc_table += &format!(") -> Result<{}: _, Error_>` | \n", field_name.to_string());
-            code.push(quote! { let #field_name = #builder_name (#(#builder_args),*)?; });
             or_recover_code.push(quote! {
                 let #field_name = match #builder_name (#(#builder_args),*) {
                     ::std::result::Result::Ok(value) => value,
@@ -675,14 +672,11 @@ fn create_try_builder_and_constructor(
         let line = quote! { unsafe {
             ((&mut (*result.as_mut_ptr()).#field_name) as *mut #field_type).write(#field_name);
         }};
-        code.push(line.clone());
         or_recover_code.push(line);
 
         if field.field_type == FieldType::Borrowed {
-            code.push(field.make_illegal_static_reference());
             or_recover_code.push(field.make_illegal_static_reference());
         } else if field.field_type == FieldType::BorrowedMut {
-            code.push(field.make_illegal_static_mut_reference());
             or_recover_code.push(field.make_illegal_static_mut_reference());
         }
     }
@@ -692,8 +686,7 @@ fn create_try_builder_and_constructor(
     let constructor_def = quote! {
         #[doc=#documentation]
         pub fn try_new<Error_>(#(#params),*) -> ::std::result::Result<Self, Error_> {
-            #(#code)*
-            ::std::result::Result::Ok(unsafe { result.assume_init() })
+            Self::try_new_or_recover(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error)
         }
         #[doc=#or_recover_documentation]
         pub fn try_new_or_recover<Error_>(#(#params),*) -> ::std::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
