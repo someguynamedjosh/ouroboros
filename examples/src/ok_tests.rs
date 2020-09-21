@@ -88,3 +88,13 @@ fn box_and_mut_ref() {
     bar.with_dref_mut(|dref| **dref = 34);
     assert!(bar.with_dref(|dref| **dref) == 34);
 }
+
+#[cfg(not(feature = "miri"))]
+mod compile_tests {
+    /// Tests that all files in fail_tests fail to compile.
+    #[test]
+    fn fails_ok() {
+        let t = trybuild::TestCases::new();
+        t.compile_fail("src/fail_tests/*.rs");
+    }
+}

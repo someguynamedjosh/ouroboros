@@ -10,7 +10,11 @@ Dual licensed under MIT / Apache 2.0.
 Note: as of September 2019, there is a [limitation in Rust's type checker](https://users.rust-lang.org/t/why-does-this-not-compile-box-t-target-t/49027/7?u=aaaaa)
 which prevents structs with chained references from compiling properly. (E.G. you cannot have a 
 struct where field C refers to field B which refers to field A.) Refer to the documentation on
-[chain_hack](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#using-chain_hack) for a workaround for this problem.
+[chain_hack](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#using-chain_hack) 
+for a workaround for this problem.
+
+Tests are located in the examples/ folder because they need to be in a crate outside of `ouroboros`
+for the `self_referencing` macro to work properly.
 
 ```rust
 use ouroboros::self_referencing;

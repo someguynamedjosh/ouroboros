@@ -10,5 +10,13 @@ repository = "https://github.com/joshua-maros/ouroboros"
 
 [lib]
 
+[features]
+default = []
+# Disables any tests that are not compatible or not intended to run under Miri
+miri = []
+
 [dependencies]
 ouroboros = { version = "0.2", path = "../ouroboros" }
+
+[dev-dependencies]
+trybuild = "1.0"
