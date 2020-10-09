@@ -4,6 +4,8 @@
 //! See the documentation of [`ouroboros_examples`](https://docs.rs/ouroboros_examples) for
 //! sample documentation of structs which have had the macro applied to them.
 
+#![allow(clippy::needless_doctest_main)]
+
 /// This macro is used to turn a regular struct into a self-referencing one. An example:
 /// ```rust
 /// use ouroboros::self_referencing;
@@ -18,14 +20,14 @@
 ///     float_reference: &'this mut f32,
 /// }
 ///
-/// fn main() {
-///     let mut my_value = MyStructBuilder {
-///         int_data: Box::new(42),
-///         float_data: Box::new(3.14),
-///         int_reference_builder: |int_data: &i32| int_data,
-///         float_reference_builder: |float_data: &mut f32| float_data,
-///     }.build();
+/// let mut my_value = MyStructBuilder {
+///     int_data: Box::new(42),
+///     float_data: Box::new(3.14),
+///     int_reference_builder: |int_data: &i32| int_data,
+///     float_reference_builder: |float_data: &mut f32| float_data,
+/// }.build();
 ///
+/// fn main() {
 ///     // Prints 42
 ///     println!("{:?}", my_value.with_int_data_contents(|int_data| *int_data));
 ///     // Prints 3.14
@@ -34,15 +36,15 @@
 ///     my_value.with_mut(|fields| {
 ///         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
 ///     });
-///
-///     // We can hold on to this reference...
-///     let int_ref = my_value.with_int_reference(|int_ref| *int_ref);
-///     println!("{:?}", *int_ref);
-///     // As long as the struct is still alive.
-///     drop(my_value);
-///     // This will cause an error!
-///     // println!("{:?}", *int_ref);
 /// }
+///
+/// // We can hold on to this reference...
+/// let int_ref = my_value.with_int_reference(|int_ref| *int_ref);
+/// println!("{:?}", *int_ref);
+/// // As long as the struct is still alive.
+/// drop(my_value);
+/// // This will cause an error!
+/// // println!("{:?}", *int_ref);
 /// ```
 /// To explain the features and limitations of this crate, some definitions are necessary:
 /// # Definitions
@@ -95,15 +97,15 @@
 ///     }
 /// }
 ///
-/// #[self_referencing]
-/// struct DataStorage {
-///     immutable: Box<i32>,
-///     mutable: Box<i32>,
-///     #[borrows(immutable, mut mutable)]
-///     complex_data: ComplexData<'this, 'this>,
-/// }
-///
 /// fn main() {
+///     #[self_referencing]
+///     struct DataStorage {
+///         immutable: Box<i32>,
+///         mutable: Box<i32>,
+///         #[borrows(immutable, mut mutable)]
+///         complex_data: ComplexData<'this, 'this>,
+///     }
+///
 ///     let mut data_storage = DataStorageBuilder {
 ///         immutable: Box::new(10),
 ///         mutable: Box::new(20),
@@ -193,6 +195,11 @@ pub mod macro_help {
     /// to get rid of the reference before the container is dropped. The + 'static ensures that
     /// whatever we are referring to will remain valid indefinitely, that there are no limitations
     /// on how long the pointer itself can live.
+    /// 
+    /// # Safety
+    /// 
+    /// The caller must ensure that the returned reference is not used after the originally passed
+    /// reference would become invalid.
     pub unsafe fn stable_deref_and_strip_lifetime<T: StableDeref + 'static>(
         data: &T,
     ) -> &'static T::Target {
@@ -200,6 +207,11 @@ pub mod macro_help {
     }
 
     /// Like stable_deref_and_strip_lifetime, but for mutable references.
+    /// 
+    /// # Safety
+    /// 
+    /// The caller must ensure that the returned reference is not used after the originally passed
+    /// reference would become invalid.
     pub unsafe fn stable_deref_and_strip_lifetime_mut<T: StableDeref + DerefMut + 'static>(
         data: &mut T,
     ) -> &'static mut T::Target {

@@ -402,7 +402,7 @@ fn create_builder_and_constructor(
     struct_name: &Ident,
     builder_struct_name: &Ident,
     generic_params: &Generics,
-    generic_args: &Vec<TokenStream2>,
+    generic_args: &[TokenStream2],
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
@@ -440,7 +440,7 @@ fn create_builder_and_constructor(
         .iter()
         .map(|param| quote! { #param })
         .collect();
-    let mut builder_struct_generic_consumers: Vec<_> = generic_args.clone();
+    let mut builder_struct_generic_consumers = Vec::from(generic_args);
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
@@ -537,7 +537,7 @@ fn create_try_builder_and_constructor(
     struct_name: &Ident,
     builder_struct_name: &Ident,
     generic_params: &Generics,
-    generic_args: &Vec<TokenStream2>,
+    generic_args: &[TokenStream2],
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
@@ -603,7 +603,7 @@ fn create_try_builder_and_constructor(
         .iter()
         .map(|param| quote! { #param })
         .collect();
-    let mut builder_struct_generic_consumers: Vec<_> = generic_args.clone();
+    let mut builder_struct_generic_consumers = Vec::from(generic_args);
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
@@ -797,7 +797,7 @@ fn make_with_all_function(
     struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
-    generic_args: &Vec<TokenStream2>,
+    generic_args: &[TokenStream2],
     do_chain_hack: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let mut fields = Vec::new();
@@ -837,7 +837,7 @@ fn make_with_all_function(
         quote! { #new_generic_params }
     };
     let new_generic_args = {
-        let mut args = generic_args.clone();
+        let mut args = Vec::from(generic_args);
         args.insert(0, quote! { 'this });
         args.insert(0, quote! { 'outer_borrow });
         args
@@ -903,7 +903,7 @@ fn make_into_heads(
     struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
-    generic_args: &Vec<TokenStream2>,
+    generic_args: &[TokenStream2],
 ) -> (TokenStream2, TokenStream2) {
     let mut code = Vec::new();
     let mut field_names = Vec::new();
@@ -941,6 +941,8 @@ fn make_into_heads(
     ).to_owned();
     let into_heads_fn = quote! {
         #[doc=#documentation]
+        #[allow(clippy::drop_ref)]
+        #[allow(clippy::drop_copy)]
         pub fn into_heads(self) -> Heads<#(#generic_args),*> {
             #(#code)*
             Heads {

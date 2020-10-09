@@ -12,6 +12,7 @@ pub struct BoxAndRef {
 }
 
 #[self_referencing(chain_hack)]
+#[allow(clippy::redundant_allocation)]
 /// A chain of references, where c references b which references a. This is an example of a struct
 /// which requires using [chain_hack](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#using-chain_hack)
 /// as of the time this was written.
