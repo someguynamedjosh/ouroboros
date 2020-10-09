@@ -98,3 +98,35 @@ mod compile_tests {
         t.compile_fail("src/fail_tests/*.rs");
     }
 }
+
+#[allow(dead_code)]
+mod test_hygiene {
+    mod std {}
+    mod core {}
+
+    struct Copy;
+    struct Send;
+    struct Sync;
+    struct Sized;
+
+    struct Drop;
+    struct Fn;
+    struct FnMut;
+    struct FnOnce;
+
+    struct Result;
+    struct Ok;
+    struct Err;
+    struct Option;
+    struct Some;
+    struct None;
+
+    fn drop() {}
+
+    #[ouroboros::self_referencing]
+    struct BoxAndRef {
+        data: Box<i32>,
+        #[borrows(data)]
+        dref: &'this i32,
+    }
+}
