@@ -20,14 +20,14 @@
 ///     float_reference: &'this mut f32,
 /// }
 ///
-/// let mut my_value = MyStructBuilder {
-///     int_data: Box::new(42),
-///     float_data: Box::new(3.14),
-///     int_reference_builder: |int_data: &i32| int_data,
-///     float_reference_builder: |float_data: &mut f32| float_data,
-/// }.build();
-///
 /// fn main() {
+///     let mut my_value = MyStructBuilder {
+///         int_data: Box::new(42),
+///         float_data: Box::new(3.14),
+///         int_reference_builder: |int_data: &i32| int_data,
+///         float_reference_builder: |float_data: &mut f32| float_data,
+///     }.build();
+/// 
 ///     // Prints 42
 ///     println!("{:?}", my_value.with_int_data_contents(|int_data| *int_data));
 ///     // Prints 3.14
@@ -36,15 +36,15 @@
 ///     my_value.with_mut(|fields| {
 ///         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
 ///     });
-/// }
 ///
-/// // We can hold on to this reference...
-/// let int_ref = my_value.with_int_reference(|int_ref| *int_ref);
-/// println!("{:?}", *int_ref);
-/// // As long as the struct is still alive.
-/// drop(my_value);
-/// // This will cause an error!
-/// // println!("{:?}", *int_ref);
+///     // We can hold on to this reference...
+///     let int_ref = my_value.with_int_reference(|int_ref| *int_ref);
+///     println!("{:?}", *int_ref);
+///     // As long as the struct is still alive.
+///     drop(my_value);
+///     // This will cause an error!
+///     // println!("{:?}", *int_ref);
+/// }
 /// ```
 /// To explain the features and limitations of this crate, some definitions are necessary:
 /// # Definitions
