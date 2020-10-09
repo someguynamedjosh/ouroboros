@@ -72,29 +72,29 @@
 /// do something like this:
 /// ```rust
 /// use ouroboros::self_referencing;
-/// 
+///
 /// pub struct ComplexData<'a, 'b> {
 ///     aref: &'a i32,
 ///     bref: &'b mut i32,
 ///     number: i32,
 /// }
-/// 
+///
 /// impl<'a, 'b> ComplexData<'a, 'b> {
 ///     fn new(aref: &'a i32, bref: &'b mut i32, number: i32) -> Self {
 ///         Self { aref, bref, number }
 ///     }
-/// 
+///
 ///     /// Copies the value aref points to into what bref points to.
 ///     fn transfer(&mut self) {
 ///         *self.bref = *self.aref;
 ///     }
-/// 
+///
 ///     /// Prints the value bref points to.
 ///     fn print_bref(&self) {
 ///         println!("{}", *self.bref);
 ///     }
 /// }
-/// 
+///
 /// #[self_referencing]
 /// struct DataStorage {
 ///     immutable: Box<i32>,
@@ -102,7 +102,7 @@
 ///     #[borrows(immutable, mut mutable)]
 ///     complex_data: ComplexData<'this, 'this>,
 /// }
-/// 
+///
 /// fn main() {
 ///     let mut data_storage = DataStorageBuilder {
 ///         immutable: Box::new(10),
@@ -118,10 +118,10 @@
 /// }
 /// ```
 /// # Using `chain_hack`
-/// Unfortunately, as of September 2020, Rust has a 
-/// [known limitation in its type checker](https://users.rust-lang.org/t/why-does-this-not-compile-box-t-target-t/49027/7?u=aaaaa) 
-/// which prevents chained references from working (I.E. structs where field C references field B 
-/// which references field A.) To counteract this problem, you can use 
+/// Unfortunately, as of September 2020, Rust has a
+/// [known limitation in its type checker](https://users.rust-lang.org/t/why-does-this-not-compile-box-t-target-t/49027/7?u=aaaaa)
+/// which prevents chained references from working (I.E. structs where field C references field B
+/// which references field A.) To counteract this problem, you can use
 /// `#[self_referencing(chain_hack)]` to allow creating these kinds of structs at the cost of
 /// additional restrictions and possible loss of clarity in some error messages. The main limitation
 /// is that all fields that are borrowed must be of type `Box<T>`. A nice error message will be
@@ -205,5 +205,4 @@ pub mod macro_help {
     ) -> &'static mut T::Target {
         &mut *((&mut **data) as *mut _)
     }
-
 }

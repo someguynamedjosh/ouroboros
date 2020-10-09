@@ -93,7 +93,7 @@ fn deref_type(field_type: &Type, do_chain_hack: bool) -> Result<TokenStream2, Er
     if do_chain_hack {
         if let Type::Path(tpath) = field_type {
             if let Some(segment) = tpath.path.segments.last() {
-                if segment.ident.to_string() == "Box" {
+                if segment.ident == "Box" {
                     if let PathArguments::AngleBracketed(args) = &segment.arguments {
                         if let Some(arg) = args.args.first() {
                             return Ok(quote! { #arg });
@@ -110,7 +110,7 @@ fn deref_type(field_type: &Type, do_chain_hack: bool) -> Result<TokenStream2, Er
             ),
         ))
     } else {
-        Ok(quote! { <#field_type as ::std::ops::Deref>::Target })
+        Ok(quote! { <#field_type as ::core::ops::Deref>::Target })
     }
 }
 
@@ -121,7 +121,7 @@ fn make_constructor_arg_type_impl(
     do_chain_hack: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
-    if for_field.borrows.len() == 0 {
+    if for_field.borrows.is_empty() {
         Ok(ArgType::Plain(quote! { #field_type }))
     } else {
         let mut field_builder_params = Vec::new();
@@ -143,7 +143,8 @@ fn make_constructor_arg_type_impl(
             }
         }
         let return_type = make_builder_return_type();
-        let bound = quote! { for<'this> FnOnce(#(#field_builder_params),*) -> #return_type };
+        let bound =
+            quote! { for<'this> ::core::ops::FnOnce(#(#field_builder_params),*) -> #return_type };
         Ok(ArgType::TraitBound(bound))
     }
 }
@@ -174,7 +175,7 @@ fn make_try_constructor_arg_type(
     make_constructor_arg_type_impl(
         for_field,
         other_fields,
-        || quote! { Result<#field_type, Error_> },
+        || quote! { ::core::result::Result<#field_type, Error_> },
         do_chain_hack,
     )
 }
@@ -184,7 +185,7 @@ fn replace_this_with_static(input: TokenStream2) -> TokenStream2 {
         .into_iter()
         .map(|token| match &token {
             TokenTree::Ident(ident) => {
-                if ident.to_string() == "this" {
+                if ident == "this" {
                     TokenTree::Ident(format_ident!("static"))
                 } else {
                     token
@@ -308,7 +309,7 @@ fn create_actual_struct(
                     if path.segments.len() != 1 {
                         continue;
                     }
-                    if path.segments.first().unwrap().ident.to_string() == "borrows" {
+                    if path.segments.first().unwrap().ident == "borrows" {
                         handle_borrows_attr(&mut field_info[..], attr, &mut borrows)?;
                         field.attrs.remove(index);
                         break;
@@ -443,7 +444,7 @@ fn create_builder_and_constructor(
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
-    code.push(quote! { let mut result = ::std::mem::MaybeUninit::<Self>::uninit(); });
+    code.push(quote! { let mut result = ::core::mem::MaybeUninit::<Self>::uninit(); });
 
     for field in field_info {
         let field_name = &field.name;
@@ -542,7 +543,7 @@ fn create_try_builder_and_constructor(
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let mut head_recover_code = Vec::new();
     for field in field_info {
-        if field.borrows.len() == 0 {
+        if field.borrows.is_empty() {
             let field_name = &field.name;
             head_recover_code.push(quote! { #field_name });
         }
@@ -606,7 +607,7 @@ fn create_try_builder_and_constructor(
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
-    or_recover_code.push(quote! { let mut result = ::std::mem::MaybeUninit::<Self>::uninit(); });
+    or_recover_code.push(quote! { let mut result = ::core::mem::MaybeUninit::<Self>::uninit(); });
 
     for field in field_info {
         let field_name = &field.name;
@@ -622,7 +623,7 @@ fn create_try_builder_and_constructor(
                 field_name.to_string()
             );
             head_recover_code[current_head_index] = quote! {
-                #field_name: unsafe { ::std::ptr::read(&(*result.as_ptr()).#field_name as *const _) }
+                #field_name: unsafe { ::core::ptr::read(&(*result.as_ptr()).#field_name as *const _) }
             };
             current_head_index += 1;
         } else if let ArgType::TraitBound(bound_type) = arg_type {
@@ -654,9 +655,9 @@ fn create_try_builder_and_constructor(
             doc_table += &format!(") -> Result<{}: _, Error_>` | \n", field_name.to_string());
             or_recover_code.push(quote! {
                 let #field_name = match #builder_name (#(#builder_args),*) {
-                    ::std::result::Result::Ok(value) => value,
-                    ::std::result::Result::Err(err)
-                        => return ::std::result::Result::Err((err, Heads { #(#head_recover_code),* })),
+                    ::core::result::Result::Ok(value) => value,
+                    ::core::result::Result::Err(err)
+                        => return ::core::result::Result::Err((err, Heads { #(#head_recover_code),* })),
                 };
             });
             let generic_type_name =
@@ -685,13 +686,13 @@ fn create_try_builder_and_constructor(
     let builder_documentation = builder_documentation + &doc_table;
     let constructor_def = quote! {
         #[doc=#documentation]
-        pub fn try_new<Error_>(#(#params),*) -> ::std::result::Result<Self, Error_> {
+        pub fn try_new<Error_>(#(#params),*) -> ::core::result::Result<Self, Error_> {
             Self::try_new_or_recover(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error)
         }
         #[doc=#or_recover_documentation]
-        pub fn try_new_or_recover<Error_>(#(#params),*) -> ::std::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
+        pub fn try_new_or_recover<Error_>(#(#params),*) -> ::core::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
-            ::std::result::Result::Ok(unsafe { result.assume_init() })
+            ::core::result::Result::Ok(unsafe { result.assume_init() })
         }
     };
     builder_struct_generic_producers.push(quote! { Error_ });
@@ -703,13 +704,13 @@ fn create_try_builder_and_constructor(
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
             #[doc=#build_fn_documentation]
-            pub fn try_build(self) -> Result<#struct_name <#(#generic_args),*>, Error_> {
+            pub fn try_build(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
                 #struct_name::try_new(
                     #(self.#builder_struct_field_names),*
                 )
             }
             #[doc=#build_or_recover_fn_documentation]
-            pub fn try_build_or_recover(self) -> Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
+            pub fn try_build_or_recover(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
                 #struct_name::try_new_or_recover(
                     #(self.#builder_struct_field_names),*
                 )
@@ -742,7 +743,7 @@ fn make_with_functions(
                 #[doc=#documentation]
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
-                    user: impl for<'this> FnOnce(&'outer_borrow #field_type) -> ReturnType,
+                    user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
                 ) -> ReturnType {
                     user(&self. #field_name)
                 }
@@ -760,7 +761,7 @@ fn make_with_functions(
                 #[doc=#documentation]
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow mut self,
-                    user: impl for<'this> FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
+                    user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
                 ) -> ReturnType {
                     user(&mut self. #field_name)
                 }
@@ -779,7 +780,7 @@ fn make_with_functions(
                 #[doc=#documentation]
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
-                    user: impl for<'this> FnOnce(&'outer_borrow #content_type) -> ReturnType,
+                    user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #content_type) -> ReturnType,
                 ) -> ReturnType {
                     user(&*self. #field_name)
                 }
@@ -823,7 +824,7 @@ fn make_with_all_function(
         }
     }
 
-    let new_generic_params = if generic_params.params.len() == 0 {
+    let new_generic_params = if generic_params.params.is_empty() {
         quote! { <'outer_borrow, 'this> }
     } else {
         let mut new_generic_params = generic_params.clone();
@@ -878,7 +879,7 @@ fn make_with_all_function(
         #[doc=#documentation]
         pub fn with <'outer_borrow, ReturnType>(
             &'outer_borrow self,
-            user: impl for <'this> FnOnce(#borrowed_fields_type) -> ReturnType
+            user: impl for<'this> ::core::ops::FnOnce(#borrowed_fields_type) -> ReturnType
         ) -> ReturnType {
             user(BorrowedFields {
                 #(#field_assignments),*
@@ -887,7 +888,7 @@ fn make_with_all_function(
         #[doc=#mut_documentation]
         pub fn with_mut <'outer_borrow, ReturnType>(
             &'outer_borrow mut self,
-            user: impl for <'this> FnOnce(#borrowed_mut_fields_type) -> ReturnType
+            user: impl for<'this> ::core::ops::FnOnce(#borrowed_mut_fields_type) -> ReturnType
         ) -> ReturnType {
             user(BorrowedMutFields {
                 #(#mut_field_assignments),*
@@ -911,14 +912,14 @@ fn make_into_heads(
     // are only dependent on fields that came before them.
     for field in field_info.iter().rev() {
         let field_name = &field.name;
-        // Heads are fields that do not borrow anything.
-        if field.borrows.len() > 0 {
-            code.push(quote! { drop(self.#field_name); });
-        } else {
+        if field.borrows.is_empty() {
             code.push(quote! { let #field_name = self.#field_name; });
             field_names.push(field_name);
             let field_type = &field.typ;
             head_fields.push(quote! { pub #field_name: #field_type });
+        } else {
+            // Heads are fields that do not borrow anything.
+            code.push(quote! { ::core::mem::drop(self.#field_name); });
         }
     }
     let documentation = format!(
@@ -1029,7 +1030,7 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         } else {
-            return Error::new(token.span().into(), "Unknown syntax, expected identifier.")
+            return Error::new(token.span(), "Unknown syntax, expected identifier.")
                 .to_compile_error()
                 .into();
         }
