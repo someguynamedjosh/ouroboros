@@ -405,6 +405,7 @@ fn create_builder_and_constructor(
     generic_args: &[TokenStream2],
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
+    do_no_doc: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let documentation = format!(
         concat!(
@@ -507,17 +508,30 @@ fn create_builder_and_constructor(
             code.push(field.make_illegal_static_mut_reference());
         }
     }
-    let documentation = documentation + &doc_table;
-    let builder_documentation = builder_documentation + &doc_table;
+
+    let documentation = if !do_no_doc {
+        let documentation = documentation + &doc_table;
+        quote! {
+            #[doc=#documentation]
+        }
+    } else { quote! { #[doc(hidden)] } };
+
+    let builder_documentation = if !do_no_doc {
+        let builder_documentation = builder_documentation + &doc_table;
+        quote! {
+            #[doc=#builder_documentation]
+        }
+    } else { quote! { #[doc(hidden)] } };
+
     let constructor_def = quote! {
-        #[doc=#documentation]
+        #documentation
         pub fn new(#(#params),*) -> Self {
             #(#code)*
             unsafe { result.assume_init() }
         }
     };
     let builder_def = quote! {
-        #[doc=#builder_documentation]
+        #builder_documentation
         pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
             #(pub #builder_struct_fields),*
         }
@@ -540,6 +554,7 @@ fn create_try_builder_and_constructor(
     generic_args: &[TokenStream2],
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
+    do_no_doc: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let mut head_recover_code = Vec::new();
     for field in field_info {
@@ -681,15 +696,30 @@ fn create_try_builder_and_constructor(
             or_recover_code.push(field.make_illegal_static_mut_reference());
         }
     }
-    let documentation = documentation + &doc_table;
-    let or_recover_documentation = or_recover_documentation + &doc_table;
-    let builder_documentation = builder_documentation + &doc_table;
+    let documentation = if !do_no_doc {
+        let documentation = documentation + &doc_table;
+        quote! {
+            #[doc=#documentation]
+        }
+    } else { quote! { #[doc(hidden)] } };
+    let or_recover_documentation = if !do_no_doc {
+        let or_recover_documentation = or_recover_documentation + &doc_table;
+        quote! {
+            #[doc=#or_recover_documentation]
+        }
+    } else { quote! { #[doc(hidden)] } };
+    let builder_documentation = if !do_no_doc {
+        let builder_documentation = builder_documentation + &doc_table;
+        quote! {
+            #[doc=#builder_documentation]
+        }
+    } else { quote! { #[doc(hidden)] } };
     let constructor_def = quote! {
-        #[doc=#documentation]
+        #documentation
         pub fn try_new<Error_>(#(#params),*) -> ::core::result::Result<Self, Error_> {
             Self::try_new_or_recover(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error)
         }
-        #[doc=#or_recover_documentation]
+        #or_recover_documentation
         pub fn try_new_or_recover<Error_>(#(#params),*) -> ::core::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
             ::core::result::Result::Ok(unsafe { result.assume_init() })
@@ -698,7 +728,7 @@ fn create_try_builder_and_constructor(
     builder_struct_generic_producers.push(quote! { Error_ });
     builder_struct_generic_consumers.push(quote! { Error_ });
     let builder_def = quote! {
-        #[doc=#builder_documentation]
+        #builder_documentation
         pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
             #(pub #builder_struct_fields),*
         }
@@ -723,6 +753,7 @@ fn create_try_builder_and_constructor(
 fn make_with_functions(
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
+    do_no_doc: bool,
 ) -> Result<Vec<TokenStream2>, Error> {
     let mut users = Vec::new();
     for field in field_info {
@@ -739,8 +770,13 @@ fn make_with_functions(
                 ),
                 field.name.to_string()
             );
+            let documentation = if !do_no_doc {
+                quote! {
+                    #[doc=#documentation]
+                }
+            } else { quote! { #[doc(hidden)] } };
             users.push(quote! {
-                #[doc=#documentation]
+                #documentation
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
@@ -757,8 +793,13 @@ fn make_with_functions(
                 ),
                 field.name.to_string()
             );
+            let documentation = if !do_no_doc {
+                quote! {
+                    #[doc=#documentation]
+                }
+            } else { quote! { #[doc(hidden)] } };
             users.push(quote! {
-                #[doc=#documentation]
+                #documentation
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow mut self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
@@ -775,9 +816,14 @@ fn make_with_functions(
                 ),
                 field.name.to_string()
             );
+            let documentation = if !do_no_doc {
+                quote! {
+                    #[doc=#documentation]
+                }
+            } else { quote! { #[doc(hidden)] } };
             let content_type = deref_type(field_type, do_chain_hack)?;
             users.push(quote! {
-                #[doc=#documentation]
+                #documentation
                 pub fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #content_type) -> ReturnType,
@@ -799,6 +845,7 @@ fn make_with_all_function(
     generic_params: &Generics,
     generic_args: &[TokenStream2],
     do_chain_hack: bool,
+    do_no_doc: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let mut fields = Vec::new();
     let mut field_assignments = Vec::new();
@@ -875,8 +922,18 @@ fn make_with_all_function(
         "This method provides mutable references to all ",
         "[tail fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions).",
     );
+    let documentation = if !do_no_doc {
+        quote! {
+            #[doc=#documentation]
+        }
+    } else { quote! { #[doc(hidden)] } };
+    let mut_documentation = if !do_no_doc {
+        quote! {
+            #[doc=#mut_documentation]
+        }
+    } else { quote! { #[doc(hidden)] } };
     let fn_defs = quote! {
-        #[doc=#documentation]
+        #documentation
         pub fn with <'outer_borrow, ReturnType>(
             &'outer_borrow self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_fields_type) -> ReturnType
@@ -885,7 +942,7 @@ fn make_with_all_function(
                 #(#field_assignments),*
             })
         }
-        #[doc=#mut_documentation]
+        #mut_documentation
         pub fn with_mut <'outer_borrow, ReturnType>(
             &'outer_borrow mut self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_mut_fields_type) -> ReturnType
@@ -904,6 +961,7 @@ fn make_into_heads(
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
     generic_args: &[TokenStream2],
+    do_no_doc: bool,
 ) -> (TokenStream2, TokenStream2) {
     let mut code = Vec::new();
     let mut field_names = Vec::new();
@@ -939,8 +997,15 @@ fn make_into_heads(
         "This function drops all internally referencing fields and returns only the ",
         "[head fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions) of this struct."
     ).to_owned();
+
+    let documentation = if !do_no_doc {
+        quote! {
+            #[doc=#documentation]
+        }
+    } else { quote! { #[doc(hidden)] } };
+
     let into_heads_fn = quote! {
-        #[doc=#documentation]
+        #documentation
         #[allow(clippy::drop_ref)]
         #[allow(clippy::drop_copy)]
         pub fn into_heads(self) -> Heads<#(#generic_args),*> {
@@ -956,6 +1021,7 @@ fn make_into_heads(
 fn self_referencing_impl(
     original_struct_def: ItemStruct,
     do_chain_hack: bool,
+    do_no_doc: bool,
 ) -> Result<TokenStream, Error> {
     let struct_name = &original_struct_def.ident;
     let mod_name = format_ident!("ouroboros_impl_{}", struct_name.to_string().to_snake_case());
@@ -974,6 +1040,7 @@ fn self_referencing_impl(
         &generic_args,
         &field_info[..],
         do_chain_hack,
+        do_no_doc,
     )?;
     let try_builder_struct_name = format_ident!("{}TryBuilder", struct_name);
     let (try_builder_def, try_constructor_def) = create_try_builder_and_constructor(
@@ -983,18 +1050,20 @@ fn self_referencing_impl(
         &generic_args,
         &field_info[..],
         do_chain_hack,
+        do_no_doc,
     )?;
 
-    let users = make_with_functions(&field_info[..], do_chain_hack)?;
+    let users = make_with_functions(&field_info[..], do_chain_hack, do_no_doc)?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(
         struct_name,
         &field_info[..],
         &generic_params,
         &generic_args,
         do_chain_hack,
+        do_no_doc,
     )?;
     let (heads_struct_def, into_heads_fn) =
-        make_into_heads(struct_name, &field_info[..], &generic_params, &generic_args);
+        make_into_heads(struct_name, &field_info[..], &generic_params, &generic_args, do_no_doc);
 
     Ok(TokenStream::from(quote! {
         mod #mod_name {
@@ -1021,10 +1090,12 @@ fn self_referencing_impl(
 #[proc_macro_attribute]
 pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut do_chain_hack = false;
+    let mut do_no_doc = false;
     for token in <TokenStream as std::convert::Into<TokenStream2>>::into(attr).into_iter() {
         if let TokenTree::Ident(ident) = token {
             match &ident.to_string()[..] {
                 "chain_hack" => do_chain_hack = true,
+                "no_doc" => do_no_doc = true,
                 _ => {
                     return Error::new_spanned(&ident, "Unknown identifier, expected 'chain_hack'.")
                         .to_compile_error()
@@ -1038,7 +1109,7 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
-    match self_referencing_impl(original_struct_def, do_chain_hack) {
+    match self_referencing_impl(original_struct_def, do_chain_hack, do_no_doc) {
         Ok(content) => content,
         Err(err) => err.to_compile_error().into(),
     }
