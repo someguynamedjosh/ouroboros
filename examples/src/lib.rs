@@ -34,3 +34,12 @@ pub struct DocumentationExample {
     #[borrows(mut float_data)]
     float_reference: &'this mut f32,
 }
+
+#[self_referencing(no_doc)]
+/// This struct is created using `#[self_referencing(no_doc)]` so the generated methods and 
+/// builders are hidden from documentation.
+pub struct Undocumented {
+    data: Box<i32>,
+    #[borrows(data)]
+    data_ref: &'this i32,
+}

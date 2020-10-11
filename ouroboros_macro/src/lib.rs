@@ -514,14 +514,18 @@ fn create_builder_and_constructor(
         quote! {
             #[doc=#documentation]
         }
-    } else { quote! { #[doc(hidden)] } };
+    } else {
+        quote! { #[doc(hidden)] }
+    };
 
     let builder_documentation = if !do_no_doc {
         let builder_documentation = builder_documentation + &doc_table;
         quote! {
             #[doc=#builder_documentation]
         }
-    } else { quote! { #[doc(hidden)] } };
+    } else {
+        quote! { #[doc(hidden)] }
+    };
 
     let constructor_def = quote! {
         #documentation
@@ -701,19 +705,25 @@ fn create_try_builder_and_constructor(
         quote! {
             #[doc=#documentation]
         }
-    } else { quote! { #[doc(hidden)] } };
+    } else {
+        quote! { #[doc(hidden)] }
+    };
     let or_recover_documentation = if !do_no_doc {
         let or_recover_documentation = or_recover_documentation + &doc_table;
         quote! {
             #[doc=#or_recover_documentation]
         }
-    } else { quote! { #[doc(hidden)] } };
+    } else {
+        quote! { #[doc(hidden)] }
+    };
     let builder_documentation = if !do_no_doc {
         let builder_documentation = builder_documentation + &doc_table;
         quote! {
             #[doc=#builder_documentation]
         }
-    } else { quote! { #[doc(hidden)] } };
+    } else {
+        quote! { #[doc(hidden)] }
+    };
     let constructor_def = quote! {
         #documentation
         pub fn try_new<Error_>(#(#params),*) -> ::core::result::Result<Self, Error_> {
@@ -774,7 +784,9 @@ fn make_with_functions(
                 quote! {
                     #[doc=#documentation]
                 }
-            } else { quote! { #[doc(hidden)] } };
+            } else {
+                quote! { #[doc(hidden)] }
+            };
             users.push(quote! {
                 #documentation
                 pub fn #user_name <'outer_borrow, ReturnType>(
@@ -797,7 +809,9 @@ fn make_with_functions(
                 quote! {
                     #[doc=#documentation]
                 }
-            } else { quote! { #[doc(hidden)] } };
+            } else {
+                quote! { #[doc(hidden)] }
+            };
             users.push(quote! {
                 #documentation
                 pub fn #user_name <'outer_borrow, ReturnType>(
@@ -820,7 +834,9 @@ fn make_with_functions(
                 quote! {
                     #[doc=#documentation]
                 }
-            } else { quote! { #[doc(hidden)] } };
+            } else {
+                quote! { #[doc(hidden)] }
+            };
             let content_type = deref_type(field_type, do_chain_hack)?;
             users.push(quote! {
                 #documentation
@@ -926,12 +942,16 @@ fn make_with_all_function(
         quote! {
             #[doc=#documentation]
         }
-    } else { quote! { #[doc(hidden)] } };
+    } else {
+        quote! { #[doc(hidden)] }
+    };
     let mut_documentation = if !do_no_doc {
         quote! {
             #[doc=#mut_documentation]
         }
-    } else { quote! { #[doc(hidden)] } };
+    } else {
+        quote! { #[doc(hidden)] }
+    };
     let fn_defs = quote! {
         #documentation
         pub fn with <'outer_borrow, ReturnType>(
@@ -1002,7 +1022,9 @@ fn make_into_heads(
         quote! {
             #[doc=#documentation]
         }
-    } else { quote! { #[doc(hidden)] } };
+    } else {
+        quote! { #[doc(hidden)] }
+    };
 
     let into_heads_fn = quote! {
         #documentation
@@ -1062,8 +1084,13 @@ fn self_referencing_impl(
         do_chain_hack,
         do_no_doc,
     )?;
-    let (heads_struct_def, into_heads_fn) =
-        make_into_heads(struct_name, &field_info[..], &generic_params, &generic_args, do_no_doc);
+    let (heads_struct_def, into_heads_fn) = make_into_heads(
+        struct_name,
+        &field_info[..],
+        &generic_params,
+        &generic_args,
+        do_no_doc,
+    );
 
     Ok(TokenStream::from(quote! {
         mod #mod_name {
@@ -1091,17 +1118,39 @@ fn self_referencing_impl(
 pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut do_chain_hack = false;
     let mut do_no_doc = false;
+    let mut expecting_comma = false;
     for token in <TokenStream as std::convert::Into<TokenStream2>>::into(attr).into_iter() {
-        if let TokenTree::Ident(ident) = token {
+        if let TokenTree::Ident(ident) = &token {
+            if expecting_comma {
+                return Error::new(token.span(), "Unexpected identifier, expected comma.")
+                    .to_compile_error()
+                    .into();
+            }
             match &ident.to_string()[..] {
                 "chain_hack" => do_chain_hack = true,
                 "no_doc" => do_no_doc = true,
                 _ => {
-                    return Error::new_spanned(&ident, "Unknown identifier, expected 'chain_hack'.")
-                        .to_compile_error()
-                        .into()
+                    return Error::new_spanned(
+                        &ident,
+                        "Unknown identifier, expected 'chain_hack' or 'no_doc'.",
+                    )
+                    .to_compile_error()
+                    .into()
                 }
             }
+            expecting_comma = true;
+        } else if let TokenTree::Punct(punct) = &token {
+            if !expecting_comma {
+                return Error::new(token.span(), "Unexpected punctuation, expected identifier.")
+                    .to_compile_error()
+                    .into();
+            }
+            if punct.as_char() != ',' {
+                return Error::new(token.span(), "Unknown punctuation, expected comma.")
+                    .to_compile_error()
+                    .into();
+            }
+            expecting_comma = false;
         } else {
             return Error::new(token.span(), "Unknown syntax, expected identifier.")
                 .to_compile_error()
