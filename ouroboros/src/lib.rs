@@ -135,8 +135,9 @@
 /// The `#[self_referencing]` struct will replace your definition with an unsafe self-referencing
 /// struct with a safe public interface. Many functions will be generated depending on your original
 /// struct definition. Documentation is generated for all items, so building documentation for
-/// your project allows accessing detailed information about available functions. The following
-/// is an overview of what is generated:
+/// your project allows accessing detailed information about available functions. Using 
+/// `#[self_referencing(no_doc)]` will hide the generated items from documentation if it is becoming 
+/// too cluttered. The following is an overview of what is generated:
 /// ### `MyStruct::new(fields...) -> MyStruct`
 /// A basic constructor. It accepts values for each field in the order you declared them in. For
 /// **head fields**, you only need to pass in what value it should have and it will be moved in
