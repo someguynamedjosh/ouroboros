@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2::{Group, Span, TokenTree};
 use quote::{format_ident, quote};
 use syn::{
-    Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, PathArguments, Type,
+    Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, PathArguments, Type, Visibility
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -292,10 +292,11 @@ fn handle_borrows_attr(
 /// fields, collecting metadata about them, reversing the order everything is stored in, and
 /// converting any uses of 'this to 'static.
 fn create_actual_struct(
+    visibility: &Visibility,
     original_struct_def: &ItemStruct,
 ) -> Result<(TokenStream2, Vec<StructFieldInfo>), Error> {
     let mut actual_struct_def = original_struct_def.clone();
-    actual_struct_def.vis = syn::parse_quote! { pub };
+    actual_struct_def.vis = visibility.clone();
     let mut field_info = Vec::new();
     match &mut actual_struct_def.fields {
         Fields::Named(fields) => {
@@ -399,6 +400,7 @@ fn make_generic_arguments(generic_params: &Generics) -> Vec<TokenStream2> {
 }
 
 fn create_builder_and_constructor(
+    visibility: &Visibility,
     struct_name: &Ident,
     builder_struct_name: &Ident,
     generic_params: &Generics,
@@ -529,19 +531,19 @@ fn create_builder_and_constructor(
 
     let constructor_def = quote! {
         #documentation
-        pub fn new(#(#params),*) -> Self {
+        #visibility fn new(#(#params),*) -> Self {
             #(#code)*
             unsafe { result.assume_init() }
         }
     };
     let builder_def = quote! {
         #builder_documentation
-        pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
-            #(pub #builder_struct_fields),*
+        #visibility struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
+            #(#visibility #builder_struct_fields),*
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
             #[doc=#build_fn_documentation]
-            pub fn build(self) -> #struct_name <#(#generic_args),*> {
+            #visibility fn build(self) -> #struct_name <#(#generic_args),*> {
                 #struct_name::new(
                     #(self.#builder_struct_field_names),*
                 )
@@ -552,6 +554,7 @@ fn create_builder_and_constructor(
 }
 
 fn create_try_builder_and_constructor(
+    visibility: &Visibility,
     struct_name: &Ident,
     builder_struct_name: &Ident,
     generic_params: &Generics,
@@ -726,11 +729,11 @@ fn create_try_builder_and_constructor(
     };
     let constructor_def = quote! {
         #documentation
-        pub fn try_new<Error_>(#(#params),*) -> ::core::result::Result<Self, Error_> {
+        #visibility fn try_new<Error_>(#(#params),*) -> ::core::result::Result<Self, Error_> {
             Self::try_new_or_recover(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error)
         }
         #or_recover_documentation
-        pub fn try_new_or_recover<Error_>(#(#params),*) -> ::core::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
+        #visibility fn try_new_or_recover<Error_>(#(#params),*) -> ::core::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
             ::core::result::Result::Ok(unsafe { result.assume_init() })
         }
@@ -739,18 +742,18 @@ fn create_try_builder_and_constructor(
     builder_struct_generic_consumers.push(quote! { Error_ });
     let builder_def = quote! {
         #builder_documentation
-        pub struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
-            #(pub #builder_struct_fields),*
+        #visibility struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
+            #(#visibility #builder_struct_fields),*
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
             #[doc=#build_fn_documentation]
-            pub fn try_build(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
+            #visibility fn try_build(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
                 #struct_name::try_new(
                     #(self.#builder_struct_field_names),*
                 )
             }
             #[doc=#build_or_recover_fn_documentation]
-            pub fn try_build_or_recover(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
+            #visibility fn try_build_or_recover(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
                 #struct_name::try_new_or_recover(
                     #(self.#builder_struct_field_names),*
                 )
@@ -761,6 +764,7 @@ fn create_try_builder_and_constructor(
 }
 
 fn make_with_functions(
+    visibility: &Visibility,
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
     do_no_doc: bool,
@@ -789,7 +793,7 @@ fn make_with_functions(
             };
             users.push(quote! {
                 #documentation
-                pub fn #user_name <'outer_borrow, ReturnType>(
+                #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
                 ) -> ReturnType {
@@ -814,7 +818,7 @@ fn make_with_functions(
             };
             users.push(quote! {
                 #documentation
-                pub fn #user_name <'outer_borrow, ReturnType>(
+                #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow mut self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
                 ) -> ReturnType {
@@ -840,7 +844,7 @@ fn make_with_functions(
             let content_type = deref_type(field_type, do_chain_hack)?;
             users.push(quote! {
                 #documentation
-                pub fn #user_name <'outer_borrow, ReturnType>(
+                #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #content_type) -> ReturnType,
                 ) -> ReturnType {
@@ -856,6 +860,7 @@ fn make_with_functions(
 }
 
 fn make_with_all_function(
+    visibility: &syn::Visibility,
     struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
@@ -872,14 +877,14 @@ fn make_with_all_function(
         let field_name = &field.name;
         let field_type = &field.typ;
         if field.field_type == FieldType::Tail {
-            fields.push(quote! { pub #field_name: &'outer_borrow #field_type });
+            fields.push(quote! { #visibility #field_name: &'outer_borrow #field_type });
             field_assignments.push(quote! { #field_name: &self.#field_name });
-            mut_fields.push(quote! { pub #field_name: &'outer_borrow mut #field_type });
+            mut_fields.push(quote! { #visibility #field_name: &'outer_borrow mut #field_type });
             mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
             let value_name = format_ident!("{}_contents", field_name);
             let content_type = deref_type(field_type, do_chain_hack)?;
-            fields.push(quote! { pub #value_name: &'outer_borrow #content_type });
+            fields.push(quote! { #visibility #value_name: &'outer_borrow #content_type });
             field_assignments.push(quote! { #value_name: &*self.#field_name });
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
@@ -924,9 +929,9 @@ fn make_with_all_function(
     );
     let struct_defs = quote! {
         #[doc=#struct_documentation]
-        pub struct BorrowedFields #new_generic_params { #(#fields),* }
+        #visibility struct BorrowedFields #new_generic_params { #(#fields),* }
         #[doc=#mut_struct_documentation]
-        pub struct BorrowedMutFields #new_generic_params { #(#mut_fields),* }
+        #visibility struct BorrowedMutFields #new_generic_params { #(#mut_fields),* }
     };
     let borrowed_fields_type = quote! { BorrowedFields<#(#new_generic_args),*> };
     let borrowed_mut_fields_type = quote! { BorrowedMutFields<#(#new_generic_args),*> };
@@ -954,7 +959,7 @@ fn make_with_all_function(
     };
     let fn_defs = quote! {
         #documentation
-        pub fn with <'outer_borrow, ReturnType>(
+        #visibility fn with <'outer_borrow, ReturnType>(
             &'outer_borrow self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_fields_type) -> ReturnType
         ) -> ReturnType {
@@ -963,7 +968,7 @@ fn make_with_all_function(
             })
         }
         #mut_documentation
-        pub fn with_mut <'outer_borrow, ReturnType>(
+        #visibility fn with_mut <'outer_borrow, ReturnType>(
             &'outer_borrow mut self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_mut_fields_type) -> ReturnType
         ) -> ReturnType {
@@ -977,6 +982,7 @@ fn make_with_all_function(
 
 /// Returns the Heads struct and a function to convert the original struct into a Heads instance.
 fn make_into_heads(
+    visibility: &Visibility,
     struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
@@ -994,7 +1000,7 @@ fn make_into_heads(
             code.push(quote! { let #field_name = self.#field_name; });
             field_names.push(field_name);
             let field_type = &field.typ;
-            head_fields.push(quote! { pub #field_name: #field_type });
+            head_fields.push(quote! { #visibility #field_name: #field_type });
         } else {
             // Heads are fields that do not borrow anything.
             code.push(quote! { ::core::mem::drop(self.#field_name); });
@@ -1009,7 +1015,7 @@ fn make_into_heads(
     );
     let heads_struct_def = quote! {
         #[doc=#documentation]
-        pub struct Heads #generic_params {
+        #visibility struct Heads #generic_params {
             #(#head_fields),*
         }
     };
@@ -1030,7 +1036,7 @@ fn make_into_heads(
         #documentation
         #[allow(clippy::drop_ref)]
         #[allow(clippy::drop_copy)]
-        pub fn into_heads(self) -> Heads<#(#generic_args),*> {
+        #visibility fn into_heads(self) -> Heads<#(#generic_args),*> {
             #(#code)*
             Heads {
                 #(#field_names),*
@@ -1038,6 +1044,27 @@ fn make_into_heads(
         }
     };
     (heads_struct_def, into_heads_fn)
+}
+
+fn submodule_contents_visiblity(original_visibility: &Visibility) -> Visibility {
+    match original_visibility {
+        // inherited: allow parent of inner submodule to see
+        Visibility::Inherited => syn::parse_quote!{ pub(super) },
+        // restricted: add an extra super if needed
+        Visibility::Restricted(ref restricted) => {
+            let is_first_component_super = restricted.path.segments.first().map(|segm| segm.ident == "super").unwrap_or(false);
+            if restricted.path.leading_colon.is_none() && is_first_component_super {
+                let mut new_visibility = restricted.clone();
+                new_visibility.in_token = Some(restricted.in_token.clone().unwrap_or_else(|| syn::parse_quote!{ in }));
+                new_visibility.path.segments = std::iter::once(syn::parse_quote!{ super }).chain(restricted.path.segments.iter().cloned()).collect();
+                Visibility::Restricted(new_visibility)
+            } else {
+                original_visibility.clone()
+            }
+        }
+        // others are absolute, can use them as-is
+        _ => original_visibility.clone(),
+    }
 }
 
 fn self_referencing_impl(
@@ -1048,14 +1075,16 @@ fn self_referencing_impl(
     let struct_name = &original_struct_def.ident;
     let mod_name = format_ident!("ouroboros_impl_{}", struct_name.to_string().to_snake_case());
     let visibility = &original_struct_def.vis;
+    let submodule_contents_visiblity = submodule_contents_visiblity(visibility);
 
-    let (actual_struct_def, field_info) = create_actual_struct(&original_struct_def)?;
+    let (actual_struct_def, field_info) = create_actual_struct(&submodule_contents_visiblity, &original_struct_def)?;
 
     let generic_params = original_struct_def.generics.clone();
     let generic_args = make_generic_arguments(&generic_params);
 
     let builder_struct_name = format_ident!("{}Builder", struct_name);
     let (builder_def, constructor_def) = create_builder_and_constructor(
+        &submodule_contents_visiblity,
         &struct_name,
         &builder_struct_name,
         &generic_params,
@@ -1066,6 +1095,7 @@ fn self_referencing_impl(
     )?;
     let try_builder_struct_name = format_ident!("{}TryBuilder", struct_name);
     let (try_builder_def, try_constructor_def) = create_try_builder_and_constructor(
+        &submodule_contents_visiblity,
         &struct_name,
         &try_builder_struct_name,
         &generic_params,
@@ -1075,8 +1105,9 @@ fn self_referencing_impl(
         do_no_doc,
     )?;
 
-    let users = make_with_functions(&field_info[..], do_chain_hack, do_no_doc)?;
+    let users = make_with_functions(&submodule_contents_visiblity, &field_info[..], do_chain_hack, do_no_doc)?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(
+        &submodule_contents_visiblity,
         struct_name,
         &field_info[..],
         &generic_params,
@@ -1085,6 +1116,7 @@ fn self_referencing_impl(
         do_no_doc,
     )?;
     let (heads_struct_def, into_heads_fn) = make_into_heads(
+        &submodule_contents_visiblity,
         struct_name,
         &field_info[..],
         &generic_params,
