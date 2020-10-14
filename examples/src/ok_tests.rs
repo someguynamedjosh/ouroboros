@@ -16,6 +16,15 @@ struct BoxAndMutRef {
     dref: &'this mut i32,
 }
 
+#[self_referencing(chain_hack, no_doc)]
+struct ChainedAndUndocumented {
+    data: Box<i32>,
+    #[borrows(data)]
+    ref1: Box<&'this i32>,
+    #[borrows(data)]
+    ref2: &'this &'this i32
+}
+
 #[test]
 fn box_and_ref() {
     let bar = BoxAndRefBuilder {
