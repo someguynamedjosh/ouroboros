@@ -201,8 +201,8 @@ pub mod macro_help {
     /// 
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
-    pub unsafe fn stable_deref_and_strip_lifetime<T: StableDeref + 'static>(
-        data: &T,
+    pub unsafe fn stable_deref_and_strip_lifetime<'a, T: StableDeref + 'static>(
+        data: &'a T,
     ) -> &'static T::Target {
         &*((&**data) as *const _)
     }
@@ -213,8 +213,8 @@ pub mod macro_help {
     /// 
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
-    pub unsafe fn stable_deref_and_strip_lifetime_mut<T: StableDeref + DerefMut + 'static>(
-        data: &mut T,
+    pub unsafe fn stable_deref_and_strip_lifetime_mut<'a, T: StableDeref + DerefMut + 'static>(
+        data: &'a mut T,
     ) -> &'static mut T::Target {
         &mut *((&mut **data) as *mut _)
     }

@@ -36,7 +36,7 @@ pub struct DocumentationExample {
 }
 
 #[self_referencing(no_doc)]
-/// This struct is created using `#[self_referencing(no_doc)]` so the generated methods and 
+/// This struct is created using `#[self_referencing(no_doc)]` so the generated methods and
 /// builders are hidden from documentation.
 pub struct Undocumented {
     data: Box<i32>,

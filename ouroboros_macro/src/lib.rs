@@ -4,7 +4,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2::{Group, Span, TokenTree};
 use quote::{format_ident, quote};
 use syn::{
-    Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, PathArguments, Type, Visibility
+    Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, PathArguments, Type,
+    Visibility,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -178,6 +179,35 @@ fn make_try_constructor_arg_type(
         || quote! { ::core::result::Result<#field_type, Error_> },
         do_chain_hack,
     )
+}
+
+/// Makes phantom data definitions so that we don't get unused template parameter errors.
+fn make_template_consumers(generics: &Generics) -> impl Iterator<Item = (TokenStream2, Ident)> {
+    generics
+        .params
+        .clone()
+        .into_iter()
+        .map(|param| match param {
+            GenericParam::Type(ty) => {
+                let ident = &ty.ident;
+                (
+                    quote! { #ident },
+                    format_ident!(
+                        "_consume_template_type_{}",
+                        ident.to_string().to_snake_case()
+                    ),
+                )
+            }
+            GenericParam::Lifetime(lt) => {
+                let lifetime = &lt.lifetime;
+                let ident = &lifetime.ident;
+                (
+                    quote! { &#lifetime () },
+                    format_ident!("_consume_template_lifetime_{}", ident),
+                )
+            }
+            GenericParam::Const(..) => unimplemented!(),
+        })
 }
 
 fn replace_this_with_static(input: TokenStream2) -> TokenStream2 {
@@ -536,12 +566,13 @@ fn create_builder_and_constructor(
             unsafe { result.assume_init() }
         }
     };
+    let generic_where = &generic_params.where_clause;
     let builder_def = quote! {
         #builder_documentation
-        #visibility struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
+        #visibility struct #builder_struct_name <#(#builder_struct_generic_producers),*> #generic_where {
             #(#visibility #builder_struct_fields),*
         }
-        impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
+        impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> #generic_where {
             #[doc=#build_fn_documentation]
             #visibility fn build(self) -> #struct_name <#(#generic_args),*> {
                 #struct_name::new(
@@ -569,6 +600,9 @@ fn create_try_builder_and_constructor(
             let field_name = &field.name;
             head_recover_code.push(quote! { #field_name });
         }
+    }
+    for (_ty, ident) in make_template_consumers(generic_params) {
+        head_recover_code.push(quote! { #ident: ::core::marker::PhantomData });
     }
     let mut current_head_index = 0;
 
@@ -740,12 +774,13 @@ fn create_try_builder_and_constructor(
     };
     builder_struct_generic_producers.push(quote! { Error_ });
     builder_struct_generic_consumers.push(quote! { Error_ });
+    let generic_where = &generic_params.where_clause;
     let builder_def = quote! {
         #builder_documentation
-        #visibility struct #builder_struct_name <#(#builder_struct_generic_producers),*> {
+        #visibility struct #builder_struct_name <#(#builder_struct_generic_producers),*> #generic_where {
             #(#visibility #builder_struct_fields),*
         }
-        impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> {
+        impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> #generic_where {
             #[doc=#build_fn_documentation]
             #visibility fn try_build(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
                 #struct_name::try_new(
@@ -895,6 +930,12 @@ fn make_with_all_function(
     let new_generic_params = if generic_params.params.is_empty() {
         quote! { <'outer_borrow, 'this> }
     } else {
+        for (ty, ident) in make_template_consumers(generic_params) {
+            fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
+            mut_fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
+            field_assignments.push(quote! { #ident: ::core::marker::PhantomData });
+            mut_field_assignments.push(quote! { #ident: ::core::marker::PhantomData });
+        }
         let mut new_generic_params = generic_params.clone();
         new_generic_params
             .params
@@ -927,11 +968,12 @@ fn make_with_all_function(
         ),
         struct_name.to_string()
     );
+    let generic_where = &generic_params.where_clause;
     let struct_defs = quote! {
         #[doc=#struct_documentation]
-        #visibility struct BorrowedFields #new_generic_params { #(#fields),* }
+        #visibility struct BorrowedFields #new_generic_params #generic_where { #(#fields),* }
         #[doc=#mut_struct_documentation]
-        #visibility struct BorrowedMutFields #new_generic_params { #(#mut_fields),* }
+        #visibility struct BorrowedMutFields #new_generic_params #generic_where { #(#mut_fields),* }
     };
     let borrowed_fields_type = quote! { BorrowedFields<#(#new_generic_args),*> };
     let borrowed_mut_fields_type = quote! { BorrowedMutFields<#(#new_generic_args),*> };
@@ -990,7 +1032,7 @@ fn make_into_heads(
     do_no_doc: bool,
 ) -> (TokenStream2, TokenStream2) {
     let mut code = Vec::new();
-    let mut field_names = Vec::new();
+    let mut field_initializers = Vec::new();
     let mut head_fields = Vec::new();
     // Drop everything in the reverse order of what it was declared in. Fields that come later
     // are only dependent on fields that came before them.
@@ -998,13 +1040,17 @@ fn make_into_heads(
         let field_name = &field.name;
         if field.borrows.is_empty() {
             code.push(quote! { let #field_name = self.#field_name; });
-            field_names.push(field_name);
+            field_initializers.push(quote! { #field_name });
             let field_type = &field.typ;
             head_fields.push(quote! { #visibility #field_name: #field_type });
         } else {
             // Heads are fields that do not borrow anything.
             code.push(quote! { ::core::mem::drop(self.#field_name); });
         }
+    }
+    for (ty, ident) in make_template_consumers(generic_params) {
+        head_fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
+        field_initializers.push(quote! { #ident: ::core::marker::PhantomData });
     }
     let documentation = format!(
         concat!(
@@ -1013,9 +1059,10 @@ fn make_into_heads(
         ),
         struct_name.to_string()
     );
+    let generic_where = &generic_params.where_clause;
     let heads_struct_def = quote! {
         #[doc=#documentation]
-        #visibility struct Heads #generic_params {
+        #visibility struct Heads #generic_params #generic_where {
             #(#head_fields),*
         }
     };
@@ -1039,7 +1086,7 @@ fn make_into_heads(
         #visibility fn into_heads(self) -> Heads<#(#generic_args),*> {
             #(#code)*
             Heads {
-                #(#field_names),*
+                #(#field_initializers),*
             }
         }
     };
@@ -1049,14 +1096,26 @@ fn make_into_heads(
 fn submodule_contents_visiblity(original_visibility: &Visibility) -> Visibility {
     match original_visibility {
         // inherited: allow parent of inner submodule to see
-        Visibility::Inherited => syn::parse_quote!{ pub(super) },
+        Visibility::Inherited => syn::parse_quote! { pub(super) },
         // restricted: add an extra super if needed
         Visibility::Restricted(ref restricted) => {
-            let is_first_component_super = restricted.path.segments.first().map(|segm| segm.ident == "super").unwrap_or(false);
+            let is_first_component_super = restricted
+                .path
+                .segments
+                .first()
+                .map(|segm| segm.ident == "super")
+                .unwrap_or(false);
             if restricted.path.leading_colon.is_none() && is_first_component_super {
                 let mut new_visibility = restricted.clone();
-                new_visibility.in_token = Some(restricted.in_token.clone().unwrap_or_else(|| syn::parse_quote!{ in }));
-                new_visibility.path.segments = std::iter::once(syn::parse_quote!{ super }).chain(restricted.path.segments.iter().cloned()).collect();
+                new_visibility.in_token = Some(
+                    restricted
+                        .in_token
+                        .clone()
+                        .unwrap_or_else(|| syn::parse_quote! { in }),
+                );
+                new_visibility.path.segments = std::iter::once(syn::parse_quote! { super })
+                    .chain(restricted.path.segments.iter().cloned())
+                    .collect();
                 Visibility::Restricted(new_visibility)
             } else {
                 original_visibility.clone()
@@ -1077,7 +1136,8 @@ fn self_referencing_impl(
     let visibility = &original_struct_def.vis;
     let submodule_contents_visiblity = submodule_contents_visiblity(visibility);
 
-    let (actual_struct_def, field_info) = create_actual_struct(&submodule_contents_visiblity, &original_struct_def)?;
+    let (actual_struct_def, field_info) =
+        create_actual_struct(&submodule_contents_visiblity, &original_struct_def)?;
 
     let generic_params = original_struct_def.generics.clone();
     let generic_args = make_generic_arguments(&generic_params);
@@ -1105,7 +1165,12 @@ fn self_referencing_impl(
         do_no_doc,
     )?;
 
-    let users = make_with_functions(&submodule_contents_visiblity, &field_info[..], do_chain_hack, do_no_doc)?;
+    let users = make_with_functions(
+        &submodule_contents_visiblity,
+        &field_info[..],
+        do_chain_hack,
+        do_no_doc,
+    )?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(
         &submodule_contents_visiblity,
         struct_name,
@@ -1124,6 +1189,7 @@ fn self_referencing_impl(
         do_no_doc,
     );
 
+    let generic_where = &generic_params.where_clause;
     Ok(TokenStream::from(quote! {
         mod #mod_name {
             use super::*;
@@ -1132,7 +1198,7 @@ fn self_referencing_impl(
             #try_builder_def
             #with_all_struct_defs
             #heads_struct_def
-            impl #generic_params #struct_name <#(#generic_args),*> {
+            impl #generic_params #struct_name <#(#generic_args),*> #generic_where {
                 #constructor_def
                 #try_constructor_def
                 #(#users)*

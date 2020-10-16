@@ -22,7 +22,26 @@ struct ChainedAndUndocumented {
     #[borrows(data)]
     ref1: Box<&'this i32>,
     #[borrows(data)]
-    ref2: &'this &'this i32
+    ref2: &'this &'this i32,
+}
+
+/// This test just makes sure that the macro copes with a ton of template parameters being thrown at
+/// it, specifically checking that the templates work fine even when a generated struct doesn't need
+/// all of them. (E.G. heads will only contain 'd, A, and B.)
+#[self_referencing]
+struct TemplateMess<'d, A, B, C>
+where
+    A: ?Sized,
+    B: 'static,
+    C: 'static,
+{
+    external: &'d A,
+    data1: Box<B>,
+    #[borrows(data1)]
+    data2: &'this C,
+    data3: Box<B>,
+    #[borrows(mut data3)]
+    data4: &'this mut C,
 }
 
 #[test]
@@ -96,6 +115,26 @@ fn box_and_mut_ref() {
     assert!(bar.with_dref(|dref| **dref) == 12);
     bar.with_dref_mut(|dref| **dref = 34);
     assert!(bar.with_dref(|dref| **dref) == 34);
+}
+
+#[test]
+fn template_mess() {
+    let ext_str = "Hello World!".to_owned();
+    let mut instance = TemplateMessBuilder {
+        external: &ext_str[..],
+        data1: Box::new("asdf".to_owned()),
+        data2_builder: |data1_contents| data1_contents,
+        data3: Box::new("asdf".to_owned()),
+        data4_builder: |data3_contents| data3_contents,
+    }
+    .build();
+    instance.with_external(|ext| println!("{}", ext));
+    instance.with_data1_contents(|con| println!("{}", con));
+    instance.with_data4_mut(|con| **con = "Modified".to_owned());
+    instance.with(|fields| {
+        assert!(fields.data1_contents == *fields.data2);
+        assert!(*fields.data4 == "Modified");
+    });
 }
 
 #[cfg(not(feature = "miri"))]
