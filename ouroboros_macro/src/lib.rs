@@ -1243,6 +1243,7 @@ fn self_referencing_impl(
 
     let generic_where = &generic_params.where_clause;
     Ok(TokenStream::from(quote! {
+        #[doc="Encapsulates implementation details for a self-referencing struct. This module is only visible when using --document-private-items."]
         mod #mod_name {
             use super::*;
             #actual_struct_def

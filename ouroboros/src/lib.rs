@@ -137,7 +137,18 @@
 /// struct definition. Documentation is generated for all items, so building documentation for
 /// your project allows accessing detailed information about available functions. Using
 /// `#[self_referencing(no_doc)]` will hide the generated items from documentation if it is becoming
-/// too cluttered. The following is an overview of what is generated:
+/// too cluttered.
+///
+/// ### A quick note on visibility
+/// The visibility of generated items is dependent on one of two things. If the
+/// generated item is related to a specific field of the struct, it uses the visibility of the
+/// original field. (The actual field in the struct will be made private since accessing it could cause
+/// undefined behavior.) If the generated item is not related to any particular field, it will by
+/// default only be visible to the module the struct is declared in. (This includes things like
+/// `new()` and `with()`.) You can use `#[self_referencing(pub_extras)]` to make these items have the
+/// same visibility as the struct itself.
+///
+/// **The following is an overview of what is generated:**
 /// ### `MyStruct::new(fields...) -> MyStruct`
 /// A basic constructor. It accepts values for each field in the order you declared them in. For
 /// **head fields**, you only need to pass in what value it should have and it will be moved in
@@ -165,6 +176,10 @@
 /// This function is generated for every **tail field** in your struct. It allows safely accessing
 /// a reference to that value. The function generates the reference and passes it to `user`. You
 /// can do anything you want with the reference, it is constructed to not outlive the struct.
+/// ### `MyStruct::borrow_FIELD(&self) -> &FieldType`
+/// This function is generated for every **tail field** in your struct. It is equivalent to calling
+/// `my_struct.with_FIELD(|field| *field)`. There is no `borrow_FIELD_mut`, unfortunately, as Rust's
+/// borrow checker is currently not capable of ensuring that such a method would be used safely.
 /// ### `MyStruct::with_FIELD_mut<R>(&mut self, user: FnOnce(field: &mut FieldType) -> R) -> R`
 /// This function is generated for every **tail field** in your struct. It is the mutable version
 /// of `with_FIELD`.
@@ -178,7 +193,9 @@
 /// Allows borrowing all **tail and immutably-borrowed fields** at once. Functions similarly to
 /// `with_FIELD`.
 /// ### `MyStruct::with_mut<R>(&self, user: FnOnce(fields: AllFields) -> R) -> R`
-/// Allows mutably borrowing all **tail fields** at once. Functions similarly to `with_FIELD_mut`.
+/// Allows mutably borrowing all **tail fields** and immutably borrowing all **immutably-borrowed**
+/// fields at once. Functions similarly to `with_FIELD_mut`, except that you can borrow multiple
+/// fields as mutable at the same time and also have immutable access to any remaining fields.
 /// ### `MyStruct::into_heads(self) -> Heads`
 /// Drops all self-referencing fields and returns a struct containing all **head fields**.
 pub use ouroboros_macro::self_referencing;

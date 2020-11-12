@@ -43,3 +43,29 @@ pub struct Undocumented {
     #[borrows(data)]
     data_ref: &'this i32,
 }
+
+/// This struct demonstrates how visibility can be controlled. The struct
+/// is defined with the following code:
+/// ```rust
+/// #[self_referencing(pub_extras)]
+/// pub struct Visibility {
+///     private_field: Box<i32>,
+///     #[borrows(private_field)]
+///     pub public_field: &'this i32,
+///     #[borrows(private_field)]
+///     pub(crate) pub_crate_field: &'this i32,
+/// }
+/// ```
+/// By using `pub_extras`, the visibility of items not related to any particular
+/// field like `with_mut` or `VisibilityBuilder` is made public to match the
+/// visibility of the original struct definition. Without adding this option,
+/// these items would only be visible in the module where the struct is
+/// declared.
+#[self_referencing(pub_extras)]
+pub struct Visibility {
+    private_field: Box<i32>,
+    #[borrows(private_field)]
+    pub public_field: &'this i32,
+    #[borrows(private_field)]
+    pub(crate) pub_crate_field: &'this i32,
+}
