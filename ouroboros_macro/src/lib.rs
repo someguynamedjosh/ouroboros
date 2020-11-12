@@ -33,6 +33,7 @@ struct StructFieldInfo {
     name: Ident,
     typ: Type,
     field_type: FieldType,
+    vis: Visibility,
     borrows: Vec<BorrowRequest>,
 }
 
@@ -347,10 +348,15 @@ fn create_actual_struct(
                     }
                 }
                 field.attrs.push(syn::parse_quote! { #[doc(hidden)] });
+                // We should not be able to access the field outside of the hidden module where 
+                // everything is generated.
+                let with_vis = submodule_contents_visiblity(&field.vis.clone());
+                field.vis = syn::Visibility::Inherited;
                 field_info.push(StructFieldInfo {
                     name: field.ident.clone().expect("Named field has no name."),
                     typ: field.ty.clone(),
                     field_type: FieldType::Tail,
+                    vis: with_vis,
                     borrows,
                 });
             }
@@ -430,7 +436,7 @@ fn make_generic_arguments(generic_params: &Generics) -> Vec<TokenStream2> {
 }
 
 fn create_builder_and_constructor(
-    visibility: &Visibility,
+    struct_visibility: &Visibility,
     struct_name: &Ident,
     builder_struct_name: &Ident,
     generic_params: &Generics,
@@ -438,7 +444,13 @@ fn create_builder_and_constructor(
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
     do_no_doc: bool,
+    do_pub_extras: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
+    let visibility = if do_pub_extras {
+        struct_visibility.clone()
+    } else {
+        syn::parse_quote! { pub(super) }
+    };
     let documentation = format!(
         concat!(
             "Constructs a new instance of this self-referential struct. (See also ",
@@ -585,7 +597,7 @@ fn create_builder_and_constructor(
 }
 
 fn create_try_builder_and_constructor(
-    visibility: &Visibility,
+    struct_visibility: &Visibility,
     struct_name: &Ident,
     builder_struct_name: &Ident,
     generic_params: &Generics,
@@ -593,7 +605,13 @@ fn create_try_builder_and_constructor(
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
     do_no_doc: bool,
+    do_pub_extras: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
+    let visibility = if do_pub_extras {
+        struct_visibility.clone()
+    } else {
+        syn::parse_quote! { pub(super) }
+    };
     let mut head_recover_code = Vec::new();
     for field in field_info {
         if field.borrows.is_empty() {
@@ -799,13 +817,13 @@ fn create_try_builder_and_constructor(
 }
 
 fn make_with_functions(
-    visibility: &Visibility,
     field_info: &[StructFieldInfo],
     do_chain_hack: bool,
     do_no_doc: bool,
 ) -> Result<Vec<TokenStream2>, Error> {
     let mut users = Vec::new();
     for field in field_info {
+        let visibility = &field.vis;
         let field_name = &field.name;
         let field_type = &field.typ;
         // If the field is not a tail, we need to serve up the same kind of reference that other
@@ -833,6 +851,15 @@ fn make_with_functions(
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
                 ) -> ReturnType {
                     user(&self. #field_name)
+                }
+            });
+            let borrower_name = format_ident!("borrow_{}", &field.name);
+            users.push(quote! {
+                #documentation
+                #visibility fn #borrower_name<'this>(
+                    &'this self,
+                ) -> &'this #field_type {
+                    &self.#field_name
                 }
             });
             // If it is not borrowed at all it's safe to allow mutably borrowing it.
@@ -895,14 +922,20 @@ fn make_with_functions(
 }
 
 fn make_with_all_function(
-    visibility: &syn::Visibility,
+    struct_visibility: &syn::Visibility,
     struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
     generic_args: &[TokenStream2],
     do_chain_hack: bool,
     do_no_doc: bool,
+    do_pub_extras: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
+    let visibility = if do_pub_extras {
+        struct_visibility.clone()
+    } else {
+        syn::parse_quote! { pub(super) }
+    };
     let mut fields = Vec::new();
     let mut field_assignments = Vec::new();
     let mut mut_fields = Vec::new();
@@ -921,7 +954,7 @@ fn make_with_all_function(
             let content_type = deref_type(field_type, do_chain_hack)?;
             let ass = quote! { #value_name: unsafe {
                 ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
-                    &self.#field_name 
+                    &self.#field_name
                 )
             } };
             fields.push(quote! { #visibility #value_name: &'this #content_type });
@@ -1031,13 +1064,19 @@ fn make_with_all_function(
 
 /// Returns the Heads struct and a function to convert the original struct into a Heads instance.
 fn make_into_heads(
-    visibility: &Visibility,
+    struct_visibility: &Visibility,
     struct_name: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
     generic_args: &[TokenStream2],
     do_no_doc: bool,
+    do_pub_extras: bool,
 ) -> (TokenStream2, TokenStream2) {
+    let visibility = if do_pub_extras {
+        struct_visibility.clone()
+    } else {
+        syn::parse_quote! { pub(super) }
+    };
     let mut code = Vec::new();
     let mut field_initializers = Vec::new();
     let mut head_fields = Vec::new();
@@ -1137,6 +1176,7 @@ fn self_referencing_impl(
     original_struct_def: ItemStruct,
     do_chain_hack: bool,
     do_no_doc: bool,
+    do_pub_extras: bool,
 ) -> Result<TokenStream, Error> {
     let struct_name = &original_struct_def.ident;
     let mod_name = format_ident!("ouroboros_impl_{}", struct_name.to_string().to_snake_case());
@@ -1159,6 +1199,7 @@ fn self_referencing_impl(
         &field_info[..],
         do_chain_hack,
         do_no_doc,
+        do_pub_extras,
     )?;
     let try_builder_struct_name = format_ident!("{}TryBuilder", struct_name);
     let (try_builder_def, try_constructor_def) = create_try_builder_and_constructor(
@@ -1170,10 +1211,10 @@ fn self_referencing_impl(
         &field_info[..],
         do_chain_hack,
         do_no_doc,
+        do_pub_extras,
     )?;
 
     let users = make_with_functions(
-        &submodule_contents_visiblity,
         &field_info[..],
         do_chain_hack,
         do_no_doc,
@@ -1186,6 +1227,7 @@ fn self_referencing_impl(
         &generic_args,
         do_chain_hack,
         do_no_doc,
+        do_pub_extras,
     )?;
     let (heads_struct_def, into_heads_fn) = make_into_heads(
         &submodule_contents_visiblity,
@@ -1194,7 +1236,14 @@ fn self_referencing_impl(
         &generic_params,
         &generic_args,
         do_no_doc,
+        do_pub_extras,
     );
+
+    let extra_visibility = if do_pub_extras {
+        visibility.clone()
+    } else {
+        syn::Visibility::Inherited
+    };
 
     let generic_where = &generic_params.where_clause;
     Ok(TokenStream::from(quote! {
@@ -1214,8 +1263,8 @@ fn self_referencing_impl(
             }
         }
         #visibility use #mod_name :: #struct_name;
-        #visibility use #mod_name :: #builder_struct_name;
-        #visibility use #mod_name :: #try_builder_struct_name;
+        #extra_visibility use #mod_name :: #builder_struct_name;
+        #extra_visibility use #mod_name :: #try_builder_struct_name;
     }))
 }
 
@@ -1223,6 +1272,7 @@ fn self_referencing_impl(
 pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut do_chain_hack = false;
     let mut do_no_doc = false;
+    let mut do_pub_extras = false;
     let mut expecting_comma = false;
     for token in <TokenStream as std::convert::Into<TokenStream2>>::into(attr).into_iter() {
         if let TokenTree::Ident(ident) = &token {
@@ -1234,6 +1284,7 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
             match &ident.to_string()[..] {
                 "chain_hack" => do_chain_hack = true,
                 "no_doc" => do_no_doc = true,
+                "pub_extras" => do_pub_extras = true,
                 _ => {
                     return Error::new_spanned(
                         &ident,
@@ -1263,7 +1314,7 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
-    match self_referencing_impl(original_struct_def, do_chain_hack, do_no_doc) {
+    match self_referencing_impl(original_struct_def, do_chain_hack, do_no_doc, do_pub_extras) {
         Ok(content) => content,
         Err(err) => err.to_compile_error().into(),
     }

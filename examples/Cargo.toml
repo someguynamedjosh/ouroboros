@@ -8,6 +8,9 @@ description = "Examples for the ouroboros crate."
 documentation = "https://docs.rs/ouroboros_examples"
 repository = "https://github.com/joshua-maros/ouroboros"
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--document-private-items"]
+
 [lib]
 
 [features]
