@@ -47,6 +47,7 @@ pub struct Undocumented {
 /// This struct demonstrates how visibility can be controlled. The struct
 /// is defined with the following code:
 /// ```rust
+/// # use ouroboros::self_referencing;
 /// #[self_referencing(pub_extras)]
 /// pub struct Visibility {
 ///     private_field: Box<i32>,
