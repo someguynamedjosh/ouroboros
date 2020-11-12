@@ -348,7 +348,7 @@ fn create_actual_struct(
                     }
                 }
                 field.attrs.push(syn::parse_quote! { #[doc(hidden)] });
-                // We should not be able to access the field outside of the hidden module where 
+                // We should not be able to access the field outside of the hidden module where
                 // everything is generated.
                 let with_vis = submodule_contents_visiblity(&field.vis.clone());
                 field.vis = syn::Visibility::Inherited;
@@ -1214,11 +1214,7 @@ fn self_referencing_impl(
         do_pub_extras,
     )?;
 
-    let users = make_with_functions(
-        &field_info[..],
-        do_chain_hack,
-        do_no_doc,
-    )?;
+    let users = make_with_functions(&field_info[..], do_chain_hack, do_no_doc)?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(
         &submodule_contents_visiblity,
         struct_name,

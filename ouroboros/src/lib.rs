@@ -27,7 +27,7 @@
 ///         int_reference_builder: |int_data: &i32| int_data,
 ///         float_reference_builder: |float_data: &mut f32| float_data,
 ///     }.build();
-/// 
+///
 ///     // Prints 42
 ///     println!("{:?}", my_value.with_int_data_contents(|int_data| *int_data));
 ///     // Prints 3.14
@@ -135,8 +135,8 @@
 /// The `#[self_referencing]` struct will replace your definition with an unsafe self-referencing
 /// struct with a safe public interface. Many functions will be generated depending on your original
 /// struct definition. Documentation is generated for all items, so building documentation for
-/// your project allows accessing detailed information about available functions. Using 
-/// `#[self_referencing(no_doc)]` will hide the generated items from documentation if it is becoming 
+/// your project allows accessing detailed information about available functions. Using
+/// `#[self_referencing(no_doc)]` will hide the generated items from documentation if it is becoming
 /// too cluttered. The following is an overview of what is generated:
 /// ### `MyStruct::new(fields...) -> MyStruct`
 /// A basic constructor. It accepts values for each field in the order you declared them in. For
@@ -196,9 +196,9 @@ pub mod macro_help {
     /// to get rid of the reference before the container is dropped. The + 'static ensures that
     /// whatever we are referring to will remain valid indefinitely, that there are no limitations
     /// on how long the pointer itself can live.
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
     pub unsafe fn stable_deref_and_strip_lifetime<'a, T: StableDeref + 'static>(
@@ -208,9 +208,9 @@ pub mod macro_help {
     }
 
     /// Like stable_deref_and_strip_lifetime, but for mutable references.
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
     pub unsafe fn stable_deref_and_strip_lifetime_mut<'a, T: StableDeref + DerefMut + 'static>(
