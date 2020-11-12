@@ -867,7 +867,9 @@ fn make_with_functions(
             let documentation = format!(
                 concat!(
                     "Provides a mutable reference to `{0}`. This method was generated because ",
-                    "`{0}` is a [tail field](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions)."
+                    "`{0}` is a [tail field](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions). ",
+                    "No `borrow_{0}_mut` function was generated because Rust's borrow checker is ",
+                    "currently unable to guarantee that such a method would be used safely."
                 ),
                 field.name.to_string()
             );
@@ -911,6 +913,15 @@ fn make_with_functions(
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #content_type) -> ReturnType,
                 ) -> ReturnType {
                     user(&*self. #field_name)
+                }
+            });
+            let borrower_name = format_ident!("borrow_{}_contents", &field.name);
+            users.push(quote! {
+                #documentation
+                #visibility fn #borrower_name<'this>(
+                    &'this self,
+                ) -> &'this #content_type {
+                    &*self.#field_name
                 }
             });
         } else if field.field_type == FieldType::BorrowedMut {

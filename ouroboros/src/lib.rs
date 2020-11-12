@@ -178,7 +178,7 @@
 /// can do anything you want with the reference, it is constructed to not outlive the struct.
 /// ### `MyStruct::borrow_FIELD(&self) -> &FieldType`
 /// This function is generated for every **tail field** in your struct. It is equivalent to calling
-/// `my_struct.with_FIELD(|field| *field)`. There is no `borrow_FIELD_mut`, unfortunately, as Rust's
+/// `my_struct.with_FIELD(|field| field)`. There is no `borrow_FIELD_mut`, unfortunately, as Rust's
 /// borrow checker is currently not capable of ensuring that such a method would be used safely.
 /// ### `MyStruct::with_FIELD_mut<R>(&mut self, user: FnOnce(field: &mut FieldType) -> R) -> R`
 /// This function is generated for every **tail field** in your struct. It is the mutable version
@@ -189,6 +189,9 @@
 /// a reference to the field's content, not the field itself. E.G. a field of type `Box<i32>` would
 /// cause this function to provide a reference of type `&i32`. There is no mutable version of this
 /// function because if a field is already borrowed, it cannot be mutably borrowed safely.
+/// ### `MyStruct::borrow_FIELD_contents<R>(&self) -> &<FieldType as Deref>::Target`
+/// This function is generated for every **immutably borrowed field** In your struct. It is
+/// equivalent to calling `my_struct.with_FIELD_contents(|contents| contents)`.
 /// ### `MyStruct::with<R>(&self, user: FnOnce(fields: AllFields) -> R) -> R`
 /// Allows borrowing all **tail and immutably-borrowed fields** at once. Functions similarly to
 /// `with_FIELD`.
