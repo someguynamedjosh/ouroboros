@@ -919,8 +919,15 @@ fn make_with_all_function(
         } else if field.field_type == FieldType::Borrowed {
             let value_name = format_ident!("{}_contents", field_name);
             let content_type = deref_type(field_type, do_chain_hack)?;
-            fields.push(quote! { #visibility #value_name: &'outer_borrow #content_type });
-            field_assignments.push(quote! { #value_name: &*self.#field_name });
+            let ass = quote! { #value_name: unsafe {
+                ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
+                    &self.#field_name 
+                )
+            } };
+            fields.push(quote! { #visibility #value_name: &'this #content_type });
+            field_assignments.push(ass.clone());
+            mut_fields.push(quote! { #visibility #value_name: &'this #content_type });
+            mut_field_assignments.push(ass);
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
             // borrowed.
