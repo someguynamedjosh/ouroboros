@@ -35,6 +35,9 @@ struct StructFieldInfo {
     field_type: FieldType,
     vis: Visibility,
     borrows: Vec<BorrowRequest>,
+    /// If this is true, we should avoid making borrow_* or borrow_*_mut functions as they will not
+    /// be able to compile.
+    uses_this_in_template: bool,
 }
 
 impl StructFieldInfo {
@@ -319,6 +322,86 @@ fn handle_borrows_attr(
     Ok(())
 }
 
+/// Returns true if the specified type uses 'this in a template parameter (and not just for a
+/// reference), meaning we cannot automatically convert from our internal representation down to
+/// &'this in borrow_* functions.
+fn type_uses_this_in_template(ty: &syn::Type) -> bool {
+    use syn::Type::*;
+    match ty {
+        Array(arr) => type_uses_this_in_template(&*arr.elem),
+        BareFn(f) => {
+            for arg in f.inputs.iter() {
+                if type_uses_this_in_template(&arg.ty) {
+                    return true;
+                }
+            }
+            if let syn::ReturnType::Type(_, ty) = &f.output {
+                type_uses_this_in_template(ty)
+            } else {
+                false
+            }
+        }
+        Group(ty) => type_uses_this_in_template(&ty.elem),
+        ImplTrait(..) => false, // Unusable in struct definition.
+        Infer(..) => false,     // Unusable in struct definition.
+        Macro(..) => true,      // Assume true since we don't know.
+        Never(..) => false,
+        Paren(ty) => type_uses_this_in_template(&ty.elem),
+        Path(path) => {
+            if let Some(qself) = &path.qself {
+                if type_uses_this_in_template(&qself.ty) {
+                    return true;
+                }
+            }
+            for segment in path.path.segments.iter() {
+                let args = &segment.arguments;
+                if let syn::PathArguments::AngleBracketed(args) = &args {
+                    for arg in args.args.iter() {
+                        if let syn::GenericArgument::Type(ty) = arg {
+                            if type_uses_this_in_template(ty) {
+                                return true;
+                            }
+                        } else if let syn::GenericArgument::Lifetime(lt) = arg {
+                            if lt.ident.to_string() == "this" {
+                                return true;
+                            }
+                        }
+                    }
+                } else if let syn::PathArguments::Parenthesized(args) = &args {
+                    for arg in args.inputs.iter() {
+                        if type_uses_this_in_template(arg) {
+                            return true;
+                        }
+                    }
+                    if let syn::ReturnType::Type(_, ty) = &args.output {
+                        if type_uses_this_in_template(ty) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
+        Ptr(ptr) => type_uses_this_in_template(&ptr.elem),
+        // Ignore the actual lifetime of the reference because Rust can automatically convert those.
+        Reference(rf) => type_uses_this_in_template(&rf.elem),
+        Slice(sl) => type_uses_this_in_template(&sl.elem),
+        // I don't think this is reachable but panic just in case.
+        TraitObject(..) => unimplemented!(),
+        Tuple(tup) => {
+            for ty in tup.elems.iter() {
+                if type_uses_this_in_template(ty) {
+                    return true;
+                }
+            }
+            false
+        }
+        // As of writing this, syn parses all the types we could need.
+        Verbatim(..) => unimplemented!(),
+        _ => unimplemented!(),
+    }
+}
+
 /// Creates the struct that will actually store the data. This involves properly organizing the
 /// fields, collecting metadata about them, reversing the order everything is stored in, and
 /// converting any uses of 'this to 'static.
@@ -358,6 +441,7 @@ fn create_actual_struct(
                     field_type: FieldType::Tail,
                     vis: with_vis,
                     borrows,
+                    uses_this_in_template: type_uses_this_in_template(&field.ty),
                 });
             }
         }
@@ -853,6 +937,10 @@ fn make_with_functions(
                     user(&self. #field_name)
                 }
             });
+            if field.uses_this_in_template {
+                // Skip the other functions, they will cause compiler errors.
+                continue;
+            }
             let borrower_name = format_ident!("borrow_{}", &field.name);
             users.push(quote! {
                 #documentation
@@ -915,6 +1003,10 @@ fn make_with_functions(
                     user(&*self. #field_name)
                 }
             });
+            if field.uses_this_in_template {
+                // Skip the other functions, they will cause compiler errors.
+                continue;
+            }
             let borrower_name = format_ident!("borrow_{}_contents", &field.name);
             users.push(quote! {
                 #documentation
