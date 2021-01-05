@@ -14,8 +14,8 @@ note: ...so that the types are compatible
   |
 3 | #[self_referencing]
   | ^^^^^^^^^^^^^^^^^^^
-  = note: expected `std::mem::MaybeUninit<ouroboros_impl_reborrow_external_ref::ReborrowExternalRef<'_>>`
-             found `std::mem::MaybeUninit<ouroboros_impl_reborrow_external_ref::ReborrowExternalRef<'a>>`
+  = note: expected `MaybeUninit<ReborrowExternalRef<'_>>`
+             found `MaybeUninit<ReborrowExternalRef<'a>>`
   = note: but, the lifetime must be valid for the static lifetime...
 note: ...so that the type `&str` will meet its required lifetime bounds
  --> $DIR/reborrow_external_ref.rs:3:1

@@ -51,23 +51,32 @@
 /// - **immutably borrowed field**: a field which is immutably borrowed by at least one other field.
 /// - **mutably borrowed field**: a field which is mutably borrowed by exactly one other field.
 /// - **self-referencing field**: a field which borrows at least one other field.
-/// - **head field**: a field which does not borrow any other fields, I.E. not self-referencing.
+/// - **head field**: a field which does not borrow any other fields, I.E. not self-referencing. 
+///   This does not include fields with empty borrows annotations (`#[borrows()]`.)
 /// - **tail field**: a field which is not borrowed by any other fields.
 ///
+/// # Usage
 /// To make a self-referencing struct, you must write a struct definition and place
 /// `#[self_referencing]` on top. For every field that borrows other fields, you must place
 /// `#[borrows()]` on top and place inside the parenthesis a list of fields that it borrows. Mut can
 /// be prefixed to indicate that a mutable borrow is required. For example,
 /// `#[borrows(a, b, mut c)]` indicates that the first two fields need to be borrowed immutably and
-/// the third needs to be borrowed mutably.
+/// the third needs to be borrowed mutably. You can also use `#[borrows()]` without any arguments to
+/// indicate a field that will eventually borrow from the struct, but does not borrow anything when
+/// first created. For example, you could use this on a field like `error: Option<&'this str>`.
+/// 
 /// # You must comply with these limitations
 /// - Fields must be declared before the first time they are borrowed.
 /// - Normal borrowing rules apply, E.G. a field cannot be borrowed mutably twice.
 /// - Fields that are borrowed must be of a data type that implement
 ///   [`StableDeref`](https://docs.rs/stable_deref_trait/1.2.0/stable_deref_trait/trait.StableDeref.html).
 ///   Normally this just means `Box<T>`.
+/// - Fields that use the `'this` lifetime must have a corresponding `#[borrows()]` annotation.
+///   The error for this needs some work, currently you will get an error saying that `'this` is
+///   undefined at the location it was illegally used in.
 ///
-/// Violating them will result in a nice error message directly pointing out the violated rule.
+/// Violating them will result in an error message directly pointing out the violated rule.
+/// 
 /// # Flexibility of this crate
 /// The example above uses plain references as the self-referencing part of the struct, but you can
 /// use anything that is dependent on lifetimes of objects inside the struct. For example, you could
@@ -131,6 +140,7 @@
 /// configurations may produce strange compiler errors. If you find such a configuration, please
 /// open an issue on the [Github repository](https://github.com/joshua-maros/ouroboros/issues).
 /// You can view a documented example of a struct which uses `chain_hack` [here](https://docs.rs/ouroboros_examples/latest/ouroboros_examples/struct.ChainHack.html).
+/// 
 /// # What does the macro generate?
 /// The `#[self_referencing]` struct will replace your definition with an unsafe self-referencing
 /// struct with a safe public interface. Many functions will be generated depending on your original
@@ -148,20 +158,24 @@
 /// `new()` and `with()`.) You can use `#[self_referencing(pub_extras)]` to make these items have the
 /// same visibility as the struct itself.
 ///
-/// **The following is an overview of what is generated:**
+/// # List of generated items
 /// ### `MyStruct::new(fields...) -> MyStruct`
 /// A basic constructor. It accepts values for each field in the order you declared them in. For
 /// **head fields**, you only need to pass in what value it should have and it will be moved in
 /// to the output. For **self-referencing fields**, you must provide a function or closure which creates
 /// the value based on the values it borrows. A field using the earlier example of
 /// `#[borrow(a, b, mut c)]` would require a function typed as
-/// `FnOnce(a: &_, b: &_, c: &mut _) -> _`.
+/// `FnOnce(a: &_, b: &_, c: &mut _) -> _`. Fields which have an empty borrows annotation 
+/// (`#[borrows()]`) should have their value directly passed in. A field using the earlier example 
+/// of `Option<&'this str>` would require an input of `None`. Do not pass a function. Do not collect
+/// 200 dollars.
 /// ### `MyStructBuilder`
 /// This is the preferred way to create a new instance of your struct. It is similar to using the
 /// `MyStruct { a, b, c, d }` syntax instead of `MyStruct::new(a, b, c, d)`. It contains one field
 /// for every argument in the actual constructor. **Head fields** have the same name that you
 /// originally defined them with. **self-referencing fields** are suffixed with `_builder` since you need
-/// to provide a function instead of a value. Calling `.build()` on an instance of `MyStructBuilder`
+/// to provide a function instead of a value. Fields with an empty borrows annotation are not 
+/// initialized using builders. Calling `.build()` on an instance of `MyStructBuilder`
 /// will convert it to an instance of `MyStruct`.
 /// ### `MyStruct::try_new<E>(fields...) -> Result<MyStruct, E>`
 /// Similar to the regular `new()` function, except the functions wich create values for all

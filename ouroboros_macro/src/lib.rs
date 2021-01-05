@@ -2,7 +2,7 @@ use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2::{Group, Span, TokenTree};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
     Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, PathArguments, Type,
     Visibility,
@@ -35,6 +35,10 @@ struct StructFieldInfo {
     field_type: FieldType,
     vis: Visibility,
     borrows: Vec<BorrowRequest>,
+    /// If this is true and borrows is empty, the struct will borrow from self in the future but
+    /// does not require a builder to be initialized. It should not be able to be removed from the
+    /// struct with into_heads.
+    self_referencing: bool,
     /// If this is true, we should avoid making borrow_* or borrow_*_mut functions as they will not
     /// be able to compile.
     uses_this_in_template: bool,
@@ -127,6 +131,9 @@ fn make_constructor_arg_type_impl(
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
     if for_field.borrows.is_empty() {
+        // Even if self_referencing is true, as long as borrows is empty, we don't need to use a
+        // builder to construct it.
+        let field_type = replace_this_with_static(field_type.into_token_stream());
         Ok(ArgType::Plain(quote! { #field_type }))
     } else {
         let mut field_builder_params = Vec::new();
@@ -416,6 +423,7 @@ fn create_actual_struct(
         Fields::Named(fields) => {
             for field in &mut fields.named {
                 let mut borrows = Vec::new();
+                let mut self_referencing = false;
                 for (index, attr) in field.attrs.iter().enumerate() {
                     let path = &attr.path;
                     if path.leading_colon.is_some() {
@@ -425,6 +433,7 @@ fn create_actual_struct(
                         continue;
                     }
                     if path.segments.first().unwrap().ident == "borrows" {
+                        self_referencing = true;
                         handle_borrows_attr(&mut field_info[..], attr, &mut borrows)?;
                         field.attrs.remove(index);
                         break;
@@ -441,6 +450,7 @@ fn create_actual_struct(
                     field_type: FieldType::Tail,
                     vis: with_vis,
                     borrows,
+                    self_referencing,
                     uses_this_in_template: type_uses_this_in_template(&field.ty),
                 });
             }
@@ -698,7 +708,7 @@ fn create_try_builder_and_constructor(
     };
     let mut head_recover_code = Vec::new();
     for field in field_info {
-        if field.borrows.is_empty() {
+        if !field.self_referencing {
             let field_name = &field.name;
             head_recover_code.push(quote! { #field_name });
         }
@@ -780,10 +790,12 @@ fn create_try_builder_and_constructor(
                 "| `{}` | Directly pass in the value this field should contain |\n",
                 field_name.to_string()
             );
-            head_recover_code[current_head_index] = quote! {
-                #field_name: unsafe { ::core::ptr::read(&(*result.as_ptr()).#field_name as *const _) }
-            };
-            current_head_index += 1;
+            if !field.self_referencing {
+                head_recover_code[current_head_index] = quote! {
+                    #field_name: unsafe { ::core::ptr::read(&(*result.as_ptr()).#field_name as *const _) }
+                };
+                current_head_index += 1;
+            }
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
             // contructor, and generic parameters need to be added to the builder struct to make
@@ -937,19 +949,6 @@ fn make_with_functions(
                     user(&self. #field_name)
                 }
             });
-            if field.uses_this_in_template {
-                // Skip the other functions, they will cause compiler errors.
-                continue;
-            }
-            let borrower_name = format_ident!("borrow_{}", &field.name);
-            users.push(quote! {
-                #documentation
-                #visibility fn #borrower_name<'this>(
-                    &'this self,
-                ) -> &'this #field_type {
-                    &self.#field_name
-                }
-            });
             // If it is not borrowed at all it's safe to allow mutably borrowing it.
             let user_name = format_ident!("with_{}_mut", &field.name);
             let documentation = format!(
@@ -975,6 +974,19 @@ fn make_with_functions(
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
                 ) -> ReturnType {
                     user(&mut self. #field_name)
+                }
+            });
+            if field.uses_this_in_template {
+                // Skip the borrower function, it will cause compiler errors.
+                continue;
+            }
+            let borrower_name = format_ident!("borrow_{}", &field.name);
+            users.push(quote! {
+                #documentation
+                #visibility fn #borrower_name<'this>(
+                    &'this self,
+                ) -> &'this #field_type {
+                    &self.#field_name
                 }
             });
         } else if field.field_type == FieldType::Borrowed {
@@ -1187,7 +1199,7 @@ fn make_into_heads(
     // are only dependent on fields that came before them.
     for field in field_info.iter().rev() {
         let field_name = &field.name;
-        if field.borrows.is_empty() {
+        if !field.self_referencing {
             code.push(quote! { let #field_name = self.#field_name; });
             field_initializers.push(quote! { #field_name });
             let field_type = &field.typ;

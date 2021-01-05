@@ -20,5 +20,5 @@ note: ...so that the expression is assignable
    |
 16 |     instance.with_data_ref(|dref| stored_ref = Some(*dref));
    |                                                ^^^^^^^^^^^
-   = note: expected `std::option::Option<&'static i32>`
-              found `std::option::Option<&i32>`
+   = note: expected `Option<&'static i32>`
+              found `Option<&i32>`
