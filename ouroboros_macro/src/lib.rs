@@ -102,7 +102,7 @@ fn deref_type(field_type: &Type, do_chain_hack: bool) -> Result<TokenStream2, Er
     if do_chain_hack {
         if let Type::Path(tpath) = field_type {
             if let Some(segment) = tpath.path.segments.last() {
-                if segment.ident == "Box" {
+                if segment.ident == "Box" || segment.ident == "Arc" || segment.ident == "Rc" {
                     if let PathArguments::AngleBracketed(args) = &segment.arguments {
                         if let Some(arg) = args.args.first() {
                             return Ok(quote! { #arg });
@@ -114,8 +114,8 @@ fn deref_type(field_type: &Type, do_chain_hack: bool) -> Result<TokenStream2, Er
         Err(Error::new_spanned(
             &field_type,
             concat!(
-                "Borrowed fields must be of type Box<T> when chain_hack is used. Either change ",
-                "the field to a Box<T> or remove chain_hack."
+                "Borrowed fields must be of type Box<T>, Arc<T>, or Rc<T> when chain_hack is ",
+                "used. Either change the field to one of the listed types or remove chain_hack."
             ),
         ))
     } else {
@@ -914,7 +914,6 @@ fn create_try_builder_and_constructor(
 
 fn make_with_functions(
     field_info: &[StructFieldInfo],
-    do_chain_hack: bool,
     do_no_doc: bool,
 ) -> Result<Vec<TokenStream2>, Error> {
     let mut users = Vec::new();
@@ -990,11 +989,11 @@ fn make_with_functions(
                 }
             });
         } else if field.field_type == FieldType::Borrowed {
-            let user_name = format_ident!("with_{}_contents", &field.name);
+            let user_name = format_ident!("with_{}", &field.name);
             let documentation = format!(
                 concat!(
-                    "Provides limited immutable access to the contents of `{0}`. This method was ",
-                    "generated because `{0}` is immutably borrowed by other fields."
+                    "Provides limited immutable access to `{0}`. This method was generated ",
+                    "because the contents of `{0}` are immutably borrowed by other fields."
                 ),
                 field.name.to_string()
             );
@@ -1005,27 +1004,26 @@ fn make_with_functions(
             } else {
                 quote! { #[doc(hidden)] }
             };
-            let content_type = deref_type(field_type, do_chain_hack)?;
             users.push(quote! {
                 #documentation
                 #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
-                    user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #content_type) -> ReturnType,
+                    user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
                 ) -> ReturnType {
-                    user(&*self. #field_name)
+                    user(&self.#field_name)
                 }
             });
             if field.uses_this_in_template {
                 // Skip the other functions, they will cause compiler errors.
                 continue;
             }
-            let borrower_name = format_ident!("borrow_{}_contents", &field.name);
+            let borrower_name = format_ident!("borrow_{}", &field.name);
             users.push(quote! {
                 #documentation
                 #visibility fn #borrower_name<'this>(
                     &'this self,
-                ) -> &'this #content_type {
-                    &*self.#field_name
+                ) -> &'this #field_type {
+                    &self.#field_name
                 }
             });
         } else if field.field_type == FieldType::BorrowedMut {
@@ -1042,7 +1040,6 @@ fn make_with_all_function(
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
     generic_args: &[TokenStream2],
-    do_chain_hack: bool,
     do_no_doc: bool,
     do_pub_extras: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
@@ -1065,16 +1062,12 @@ fn make_with_all_function(
             mut_fields.push(quote! { #visibility #field_name: &'outer_borrow mut #field_type });
             mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
-            let value_name = format_ident!("{}_contents", field_name);
-            let content_type = deref_type(field_type, do_chain_hack)?;
-            let ass = quote! { #value_name: unsafe {
-                ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
-                    &self.#field_name
-                )
+            let ass = quote! { #field_name: unsafe {
+                &self.#field_name
             } };
-            fields.push(quote! { #visibility #value_name: &'this #content_type });
+            fields.push(quote! { #visibility #field_name: &'outer_borrow #field_type });
             field_assignments.push(ass.clone());
-            mut_fields.push(quote! { #visibility #value_name: &'this #content_type });
+            mut_fields.push(quote! { #visibility #field_name: &'outer_borrow #field_type});
             mut_field_assignments.push(ass);
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
@@ -1329,14 +1322,13 @@ fn self_referencing_impl(
         do_pub_extras,
     )?;
 
-    let users = make_with_functions(&field_info[..], do_chain_hack, do_no_doc)?;
+    let users = make_with_functions(&field_info[..], do_no_doc)?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(
         &submodule_contents_visiblity,
         struct_name,
         &field_info[..],
         &generic_params,
         &generic_args,
-        do_chain_hack,
         do_no_doc,
         do_pub_extras,
     )?;

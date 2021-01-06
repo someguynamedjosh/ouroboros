@@ -1,4 +1,6 @@
 use ouroboros::self_referencing;
+use std::rc::Rc;
+use std::sync::Arc;
 
 #[cfg(test)]
 mod ok_tests;
@@ -19,9 +21,9 @@ pub struct BoxAndRef {
 pub struct ChainHack {
     a: Box<i32>,
     #[borrows(a)]
-    b: Box<&'this i32>,
+    b: Arc<&'this i32>,
     #[borrows(b)]
-    c: Box<&'this i32>,
+    c: Rc<&'this i32>,
 }
 
 #[self_referencing]

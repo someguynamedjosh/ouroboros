@@ -129,10 +129,10 @@ fn template_mess() {
     }
     .build();
     instance.with_external(|ext| println!("{}", ext));
-    instance.with_data1_contents(|con| println!("{}", con));
+    instance.with_data1(|data| println!("{}", *data));
     instance.with_data4_mut(|con| **con = "Modified".to_owned());
     instance.with(|fields| {
-        assert!(fields.data1_contents == *fields.data2);
+        assert!(**fields.data1 == **fields.data2);
         assert!(*fields.data4 == "Modified");
     });
 }

@@ -1,6 +1,5 @@
 //! A crate for creating safe self-referencing structs.
 //!
-//! See the documentation for [`#[self_referencing]`](self_referencing) to get started.
 //! See the documentation of [`ouroboros_examples`](https://docs.rs/ouroboros_examples) for
 //! sample documentation of structs which have had the macro applied to them.
 
@@ -9,7 +8,7 @@
 /// This macro is used to turn a regular struct into a self-referencing one. An example:
 /// ```rust
 /// use ouroboros::self_referencing;
-///
+/// 
 /// #[self_referencing]
 /// struct MyStruct {
 ///     int_data: Box<i32>,
@@ -19,7 +18,7 @@
 ///     #[borrows(mut float_data)]
 ///     float_reference: &'this mut f32,
 /// }
-///
+/// 
 /// fn main() {
 ///     let mut my_value = MyStructBuilder {
 ///         int_data: Box::new(42),
@@ -27,18 +26,18 @@
 ///         int_reference_builder: |int_data: &i32| int_data,
 ///         float_reference_builder: |float_data: &mut f32| float_data,
 ///     }.build();
-///
+/// 
 ///     // Prints 42
-///     println!("{:?}", my_value.with_int_data_contents(|int_data| *int_data));
+///     println!("{:?}", my_value.borrow_int_data());
 ///     // Prints 3.14
-///     println!("{:?}", my_value.with_float_reference(|float_reference| **float_reference));
+///     println!("{:?}", my_value.borrow_float_reference());
 ///     // Sets the value of float_data to 84.0
 ///     my_value.with_mut(|fields| {
 ///         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
 ///     });
-///
+/// 
 ///     // We can hold on to this reference...
-///     let int_ref = my_value.with_int_reference(|int_ref| *int_ref);
+///     let int_ref = *my_value.borrow_int_reference();
 ///     println!("{:?}", *int_ref);
 ///     // As long as the struct is still alive.
 ///     drop(my_value);
@@ -187,25 +186,20 @@
 /// the original error in case of an error. The preferred way to use this function is through
 /// `MyStructTryBuilder` and its `try_build_or_recover()` function.
 /// ### `MyStruct::with_FIELD<R>(&self, user: FnOnce(field: &FieldType) -> R) -> R`
-/// This function is generated for every **tail field** in your struct. It allows safely accessing
+/// This function is generated for every **tail and immutably-borrowed field** in your struct. It 
+/// allows safely accessing
 /// a reference to that value. The function generates the reference and passes it to `user`. You
 /// can do anything you want with the reference, it is constructed to not outlive the struct.
 /// ### `MyStruct::borrow_FIELD(&self) -> &FieldType`
-/// This function is generated for every **tail field** in your struct. It is equivalent to calling
-/// `my_struct.with_FIELD(|field| field)`. There is no `borrow_FIELD_mut`, unfortunately, as Rust's
+/// This function is generated for every **tail and immutably-borrowed field** in your struct. It 
+/// is equivalent to calling `my_struct.with_FIELD(|field| field)`. Note that certain types of
+/// fields would cause this function to generate a compiler error, so it is ommitted. Generally, if
+/// your field uses `'this` as a lifetime parameter, the corresponding `borrow_FIELD` function will
+/// not be generated. There is no `borrow_FIELD_mut`, unfortunately, as Rust's
 /// borrow checker is currently not capable of ensuring that such a method would be used safely.
 /// ### `MyStruct::with_FIELD_mut<R>(&mut self, user: FnOnce(field: &mut FieldType) -> R) -> R`
 /// This function is generated for every **tail field** in your struct. It is the mutable version
 /// of `with_FIELD`.
-/// ### `MyStruct::with_FIELD_contents<R>(&self, user: FnOnce(data: &<FieldType as Deref>::Target) -> R) -> R`
-/// This function is generated for every **immutably borrowed field** In your struct. It allows
-/// accessing the contents of that field. It is similar to `with_FIELD` except that it provides
-/// a reference to the field's content, not the field itself. E.G. a field of type `Box<i32>` would
-/// cause this function to provide a reference of type `&i32`. There is no mutable version of this
-/// function because if a field is already borrowed, it cannot be mutably borrowed safely.
-/// ### `MyStruct::borrow_FIELD_contents<R>(&self) -> &<FieldType as Deref>::Target`
-/// This function is generated for every **immutably borrowed field** In your struct. It is
-/// equivalent to calling `my_struct.with_FIELD_contents(|contents| contents)`.
 /// ### `MyStruct::with<R>(&self, user: FnOnce(fields: AllFields) -> R) -> R`
 /// Allows borrowing all **tail and immutably-borrowed fields** at once. Functions similarly to
 /// `with_FIELD`.
