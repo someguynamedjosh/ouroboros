@@ -7,7 +7,12 @@
 Easy self-referential struct generation for Rust. 
 Dual licensed under MIT / Apache 2.0.
 
-Note: as of September 2019, there is a [limitation in Rust's type checker](https://users.rust-lang.org/t/why-does-this-not-compile-box-t-target-t/49027/7?u=aaaaa)
+Note: Version `0.7.0` removed the `with_*_contents` and `borrow_*_contents` functions, replacing
+them with `with_*` and `borrows_*` functions that work similar to functions with those names in 
+earlier versions. In other words, there is no longer seperate semantics for accessing tail fields
+and immutably borrowed fields. See the documentation for a full explanation.
+
+Note: as of September 2020, there is a [limitation in Rust's type checker](https://users.rust-lang.org/t/why-does-this-not-compile-box-t-target-t/49027/7?u=aaaaa)
 which prevents structs with chained references from compiling properly. (E.G. you cannot have a 
 struct where field C refers to field B which refers to field A.) Refer to the documentation on
 [chain_hack](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#using-chain_hack) 

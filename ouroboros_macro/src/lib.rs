@@ -1392,7 +1392,7 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
                 _ => {
                     return Error::new_spanned(
                         &ident,
-                        "Unknown identifier, expected 'chain_hack' or 'no_doc'.",
+                        "Unknown identifier, expected 'chain_hack', 'no_doc', or 'pub_extras'.",
                     )
                     .to_compile_error()
                     .into()
