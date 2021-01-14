@@ -948,6 +948,17 @@ fn make_with_functions(
                     user(&self. #field_name)
                 }
             });
+            if !field.uses_this_in_template {
+                let borrower_name = format_ident!("borrow_{}", &field.name);
+                users.push(quote! {
+                    #documentation
+                    #visibility fn #borrower_name<'this>(
+                        &'this self,
+                    ) -> &'this #field_type {
+                        &self.#field_name
+                    }
+                });
+            }
             // If it is not borrowed at all it's safe to allow mutably borrowing it.
             let user_name = format_ident!("with_{}_mut", &field.name);
             let documentation = format!(
@@ -973,19 +984,6 @@ fn make_with_functions(
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
                 ) -> ReturnType {
                     user(&mut self. #field_name)
-                }
-            });
-            if field.uses_this_in_template {
-                // Skip the borrower function, it will cause compiler errors.
-                continue;
-            }
-            let borrower_name = format_ident!("borrow_{}", &field.name);
-            users.push(quote! {
-                #documentation
-                #visibility fn #borrower_name<'this>(
-                    &'this self,
-                ) -> &'this #field_type {
-                    &self.#field_name
                 }
             });
         } else if field.field_type == FieldType::Borrowed {
@@ -1063,11 +1061,14 @@ fn make_with_all_function(
             mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
             let ass = quote! { #field_name: unsafe {
-                &self.#field_name
+                ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
+                    &self.#field_name
+                )
             } };
-            fields.push(quote! { #visibility #field_name: &'outer_borrow #field_type });
+            let deref_type = quote! { <#field_type as ::std::ops::Deref>::Target };
+            fields.push(quote! { #visibility #field_name: &'this #deref_type });
             field_assignments.push(ass.clone());
-            mut_fields.push(quote! { #visibility #field_name: &'outer_borrow #field_type});
+            mut_fields.push(quote! { #visibility #field_name: &'this #deref_type });
             mut_field_assignments.push(ass);
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably

@@ -137,6 +137,23 @@ fn template_mess() {
     });
 }
 
+const STATIC_INT: i32 = 456;
+#[test]
+fn self_reference_with() {
+    let mut bar = BoxAndRef::new(Box::new(123), |b| b);
+    bar.with_dref(|dref| {
+        assert_eq!(**dref, 123);
+    });
+    bar.with_dref_mut(|dref| {
+        *dref = &STATIC_INT;
+    });
+    assert_eq!(**bar.borrow_dref(), STATIC_INT);
+    bar.with_mut(|fields| {
+        *fields.dref = fields.data;
+    });
+    assert_eq!(**bar.borrow_dref(), 123);
+}
+
 #[cfg(not(feature = "miri"))]
 mod compile_tests {
     /// Tests that all files in fail_tests fail to compile.
