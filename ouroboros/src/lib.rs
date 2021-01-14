@@ -111,6 +111,7 @@
 ///         immutable: Box<i32>,
 ///         mutable: Box<i32>,
 ///         #[borrows(immutable, mut mutable)]
+///         #[covariant]
 ///         complex_data: ComplexData<'this, 'this>,
 ///     }
 ///
