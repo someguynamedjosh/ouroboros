@@ -55,6 +55,21 @@ fn box_and_ref() {
     drop(bar);
 }
 
+// Miri crashes with Pin<Box<Future>> types due to
+// https://github.com/rust-lang/miri/issues/1038
+#[cfg(not(feature = "miri"))]
+#[tokio::test]
+async fn async_new() {
+    let bar = BoxAndRefAsyncBuilder {
+        data: Box::new(12),
+        dref_builder: |data| Box::pin(async move { data })
+    }
+    .build()
+    .await;
+    assert!(bar.with_dref(|dref| **dref) == 12);
+    drop(bar);
+}
+
 #[test]
 fn try_new() {
     let bar = BoxAndRefTryBuilder {
