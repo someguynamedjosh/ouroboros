@@ -252,10 +252,15 @@
 /// **self-referencing fields** can return `Result<>`s. If any of those are `Err`s, that error will be
 /// returned instead of an instance of `MyStruct`. The preferred way to use this function is through
 /// `MyStructTryBuilder` and its `try_build()` function.
-/// ### `MyStruct::try_new_or_recover<E>(fields...) -> Result<MyStruct, (E, Heads)>`
-/// Similar to the `try_new()` function, except that all the **head fields** are returned along side
+/// ### `MyStruct::try_new_async<E>(fields...) -> Result<MyStruct, E>`
+/// Similar to the regular `new_async()` function, except the functions wich create values for all
+/// **self-referencing fields** can return `Result<>`s. If any of those are `Err`s, that error will be
+/// returned instead of an instance of `MyStruct`. The preferred way to use this function is through
+/// `MyStructAsyncTryBuilder` and its `try_build()` function.
+/// ### `MyStruct::try_new_or_recover_async<E>(fields...) -> Result<MyStruct, (E, Heads)>`
+/// Similar to the `try_new_async()` function, except that all the **head fields** are returned along side
 /// the original error in case of an error. The preferred way to use this function is through
-/// `MyStructTryBuilder` and its `try_build_or_recover()` function.
+/// `MyStructAsyncTryBuilder` and its `try_build_or_recover()` function.
 /// ### `MyStruct::with_FIELD<R>(&self, user: FnOnce(field: &FieldType) -> R) -> R`
 /// This function is generated for every **tail and immutably-borrowed field** in your struct. It 
 /// allows safely accessing

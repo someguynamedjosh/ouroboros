@@ -205,12 +205,18 @@ fn make_try_constructor_arg_type(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
     do_chain_hack: bool,
+    make_async: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
+    let return_ty_constructor = || if make_async {
+        quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + 'this>> }
+    } else {
+        quote! { ::core::result::Result<#field_type, Error_> }
+    };
     make_constructor_arg_type_impl(
         for_field,
         other_fields,
-        || quote! { ::core::result::Result<#field_type, Error_> },
+        return_ty_constructor,
         do_chain_hack,
     )
 }
@@ -771,6 +777,7 @@ fn create_try_builder_and_constructor(
     do_chain_hack: bool,
     do_no_doc: bool,
     do_pub_extras: bool,
+    make_async: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let visibility = if do_pub_extras {
         struct_visibility.clone()
@@ -851,7 +858,7 @@ fn create_try_builder_and_constructor(
     for field in field_info {
         let field_name = &field.name;
 
-        let arg_type = make_try_constructor_arg_type(&field, &field_info[..], do_chain_hack)?;
+        let arg_type = make_try_constructor_arg_type(&field, &field_info[..], do_chain_hack, make_async)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -894,8 +901,13 @@ fn create_try_builder_and_constructor(
                 }
             }
             doc_table += &format!(") -> Result<{}: _, Error_>` | \n", field_name.to_string());
+            let builder_value = if make_async {
+                quote! { #builder_name (#(#builder_args),*).await }
+            } else {
+                quote! { #builder_name (#(#builder_args),*) }
+            };
             or_recover_code.push(quote! {
-                let #field_name = match #builder_name (#(#builder_args),*) {
+                let #field_name = match #builder_value {
                     ::core::result::Result::Ok(value) => value,
                     ::core::result::Result::Err(err)
                         => return ::core::result::Result::Err((err, Heads { #(#head_recover_code),* })),
@@ -946,13 +958,33 @@ fn create_try_builder_and_constructor(
     } else {
         quote! { #[doc(hidden)] }
     };
+    let or_recover_ident = if make_async {
+        quote! { try_new_or_recover_async }
+    } else {
+        quote! { try_new_or_recover }
+    };
+    let or_recover_constructor_fn = if make_async {
+        quote! { async fn #or_recover_ident }
+    } else {
+        quote! { fn #or_recover_ident }
+    };
+    let constructor_fn = if make_async {
+        quote! { async fn try_new_async }
+    } else {
+        quote! { fn try_new }
+    };
+    let constructor_code = if make_async {
+        quote! { #struct_name::#or_recover_ident(#(#builder_struct_field_names),*).await.map_err(|(error, _heads)| error) }
+    } else {
+        quote! { #struct_name::#or_recover_ident(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error) }
+    };
     let constructor_def = quote! {
         #documentation
-        #visibility fn try_new<Error_>(#(#params),*) -> ::core::result::Result<Self, Error_> {
-            Self::try_new_or_recover(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error)
+        #visibility #constructor_fn<Error_>(#(#params),*) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
+            #constructor_code
         }
         #or_recover_documentation
-        #visibility fn try_new_or_recover<Error_>(#(#params),*) -> ::core::result::Result<Self, (Error_, Heads<#(#generic_args),*>)> {
+        #visibility #or_recover_constructor_fn<Error_>(#(#params),*) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
             ::core::result::Result::Ok(unsafe { result.assume_init() })
         }
@@ -960,6 +992,42 @@ fn create_try_builder_and_constructor(
     builder_struct_generic_producers.push(quote! { Error_ });
     builder_struct_generic_consumers.push(quote! { Error_ });
     let generic_where = &generic_params.where_clause;
+    let builder_fn = if make_async {
+        quote! { async fn try_build }
+    } else {
+        quote! { fn try_build }
+    };
+    let or_recover_builder_fn = if make_async {
+        quote! { async fn try_build_or_recover }
+    } else {
+        quote! { fn try_build_or_recover }
+    };
+    let builder_code = if make_async {
+        quote! {
+            #struct_name::try_new_async(
+                #(self.#builder_struct_field_names),*
+            ).await
+        }
+    } else {
+        quote! {
+            #struct_name::try_new(
+                #(self.#builder_struct_field_names),*
+            )
+        }
+    };
+    let or_recover_builder_code = if make_async {
+        quote! {
+            #struct_name::try_new_or_recover_async(
+                #(self.#builder_struct_field_names),*
+            ).await
+        }
+    } else {
+        quote! {
+            #struct_name::try_new_or_recover(
+                #(self.#builder_struct_field_names),*
+            )
+        }
+    };
     let builder_def = quote! {
         #builder_documentation
         #visibility struct #builder_struct_name <#(#builder_struct_generic_producers),*> #generic_where {
@@ -967,16 +1035,12 @@ fn create_try_builder_and_constructor(
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> #generic_where {
             #[doc=#build_fn_documentation]
-            #visibility fn try_build(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
-                #struct_name::try_new(
-                    #(self.#builder_struct_field_names),*
-                )
+            #visibility #builder_fn(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
+                #builder_code
             }
             #[doc=#build_or_recover_fn_documentation]
-            #visibility fn try_build_or_recover(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
-                #struct_name::try_new_or_recover(
-                    #(self.#builder_struct_field_names),*
-                )
+            #visibility #or_recover_builder_fn(self) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
+                #or_recover_builder_code
             }
         }
     };
@@ -1412,6 +1476,20 @@ fn self_referencing_impl(
         do_chain_hack,
         do_no_doc,
         do_pub_extras,
+        false,
+    )?;
+    let async_try_builder_struct_name = format_ident!("{}AsyncTryBuilder", struct_name);
+    let (async_try_builder_def, async_try_constructor_def) = create_try_builder_and_constructor(
+        &submodule_contents_visiblity,
+        &struct_name,
+        &async_try_builder_struct_name,
+        &generic_params,
+        &generic_args,
+        &field_info[..],
+        do_chain_hack,
+        do_no_doc,
+        do_pub_extras,
+        true,
     )?;
 
     let users = make_with_functions(&field_info[..], do_no_doc)?;
@@ -1449,12 +1527,14 @@ fn self_referencing_impl(
             #builder_def
             #async_builder_def
             #try_builder_def
+            #async_try_builder_def
             #with_all_struct_defs
             #heads_struct_def
             impl #generic_params #struct_name <#(#generic_args),*> #generic_where {
                 #constructor_def
                 #async_constructor_def
                 #try_constructor_def
+                #async_try_constructor_def
                 #(#users)*
                 #with_all_fn_defs
                 #into_heads_fn
@@ -1464,6 +1544,7 @@ fn self_referencing_impl(
         #extra_visibility use #mod_name :: #builder_struct_name;
         #extra_visibility use #mod_name :: #async_builder_struct_name;
         #extra_visibility use #mod_name :: #try_builder_struct_name;
+        #extra_visibility use #mod_name :: #async_try_builder_struct_name;
     }))
 }
 

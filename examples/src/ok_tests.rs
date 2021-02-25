@@ -70,6 +70,40 @@ async fn async_new() {
     drop(bar);
 }
 
+// Miri crashes with Pin<Box<Future>> types due to
+// https://github.com/rust-lang/miri/issues/1038
+#[cfg(not(feature = "miri"))]
+#[tokio::test]
+async fn async_try_new() {
+    let bar = BoxAndRefAsyncTryBuilder {
+        data: Box::new(12),
+        dref_builder: |data| Box::pin(async move { Result::<_, ()>::Ok(data) })
+    }
+    .try_build()
+    .await
+    .unwrap();
+    assert!(bar.with_dref(|dref| **dref) == 12);
+    drop(bar);
+}
+
+// Miri crashes with Pin<Box<Future>> types due to
+// https://github.com/rust-lang/miri/issues/1038
+#[cfg(not(feature = "miri"))]
+#[tokio::test]
+async fn async_try_new_err() {
+    let result = BoxAndRefAsyncTryBuilder {
+        data: Box::new(12),
+        dref_builder: |_data| Box::pin(async move { Err(56u64) })
+    }
+    .try_build()
+    .await;
+    if let Err(56) = result {
+        // okay
+    } else {
+        panic!("Test failed.");
+    }
+}
+
 #[test]
 fn try_new() {
     let bar = BoxAndRefTryBuilder {
