@@ -75,7 +75,55 @@
 ///   undefined at the location it was illegally used in.
 ///
 /// Violating them will result in an error message directly pointing out the violated rule.
-/// 
+///
+/// # Async usage
+/// All self-referencing structs can be initialized asynchronously by using either the
+/// `MyStruct::new_async()` function or the `MyStructAsyncBuilder` builder. Due to limitations of
+/// the rust compiler you closures must return a Future trait object wrapped in a `Pin<Box<_>>`.
+///
+/// Here is the same example as above in its async version:
+///
+/// ```ignore
+/// use ouroboros::self_referencing;
+///
+/// #[self_referencing]
+/// struct MyStruct {
+///     int_data: Box<i32>,
+///     float_data: Box<f32>,
+///     #[borrows(int_data)]
+///     int_reference: &'this i32,
+///     #[borrows(mut float_data)]
+///     float_reference: &'this mut f32,
+/// }
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let mut my_value = MyStructAsyncBuilder {
+///         int_data: Box::new(42),
+///         float_data: Box::new(3.14),
+///         int_reference_builder: |int_data: &i32| Box::pin(async move { int_data }),
+///         float_reference_builder: |float_data: &mut f32| Box::pin( async move { float_data }),
+///     }.build().await;
+///
+///     // Prints 42
+///     println!("{:?}", my_value.borrow_int_data());
+///     // Prints 3.14
+///     println!("{:?}", my_value.borrow_float_reference());
+///     // Sets the value of float_data to 84.0
+///     my_value.with_mut(|fields| {
+///         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
+///     });
+///
+///     // We can hold on to this reference...
+///     let int_ref = *my_value.borrow_int_reference();
+///     println!("{:?}", *int_ref);
+///     // As long as the struct is still alive.
+///     drop(my_value);
+///     // This will cause an error!
+///     // println!("{:?}", *int_ref);
+/// }
+/// ```
+///
 /// # Flexibility of this crate
 /// The example above uses plain references as the self-referencing part of the struct, but you can
 /// use anything that is dependent on lifetimes of objects inside the struct. For example, you could
@@ -182,6 +230,10 @@
 /// (`#[borrows()]`) should have their value directly passed in. A field using the earlier example 
 /// of `Option<&'this str>` would require an input of `None`. Do not pass a function. Do not collect
 /// 200 dollars.
+/// ### `MyStruct::new_async(fields...) -> MyStruct`
+/// A basic async constructor. It works identically to the sync constructor differing only in the
+/// type of closures it expects. Whenever a closure is required it is expected to return a Pinned
+/// and Boxed Future that Outputs the same type as the synchronous version.
 /// ### `MyStructBuilder`
 /// This is the preferred way to create a new instance of your struct. It is similar to using the
 /// `MyStruct { a, b, c, d }` syntax instead of `MyStruct::new(a, b, c, d)`. It contains one field
@@ -190,6 +242,11 @@
 /// to provide a function instead of a value. Fields with an empty borrows annotation are not 
 /// initialized using builders. Calling `.build()` on an instance of `MyStructBuilder`
 /// will convert it to an instance of `MyStruct`.
+/// ### `MyStructAsyncBuilder`
+/// This is the preferred way to asynchronously create a new instance of your struct. It works
+/// identically to the synchronous builder differing only in the type of closures it expects.
+/// Whenever a closure is required it is expected to return a Pinned and Boxed Future that Outputs
+/// the same type as the synchronous version.
 /// ### `MyStruct::try_new<E>(fields...) -> Result<MyStruct, E>`
 /// Similar to the regular `new()` function, except the functions wich create values for all
 /// **self-referencing fields** can return `Result<>`s. If any of those are `Err`s, that error will be

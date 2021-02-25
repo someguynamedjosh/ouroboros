@@ -184,12 +184,18 @@ fn make_constructor_arg_type(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
     do_chain_hack: bool,
+    make_async: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
+    let return_ty_constructor = || if make_async {
+        quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=#field_type> + 'this>> }
+    } else {
+        quote! { #field_type }
+    };
     make_constructor_arg_type_impl(
         for_field,
         other_fields,
-        || quote! { #field_type },
+        return_ty_constructor,
         do_chain_hack,
     )
 }
@@ -578,6 +584,7 @@ fn create_builder_and_constructor(
     do_chain_hack: bool,
     do_no_doc: bool,
     do_pub_extras: bool,
+    make_async: bool,
 ) -> Result<(TokenStream2, TokenStream2), Error> {
     let visibility = if do_pub_extras {
         struct_visibility.clone()
@@ -627,7 +634,7 @@ fn create_builder_and_constructor(
     for field in field_info {
         let field_name = &field.name;
 
-        let arg_type = make_constructor_arg_type(&field, &field_info[..], do_chain_hack)?;
+        let arg_type = make_constructor_arg_type(&field, &field_info[..], do_chain_hack, make_async)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -664,7 +671,11 @@ fn create_builder_and_constructor(
                 }
             }
             doc_table += &format!(") -> {}: _` | \n", field_name.to_string());
-            code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
+            if make_async {
+                code.push(quote! { let #field_name = #builder_name (#(#builder_args),*).await; });
+            } else {
+                code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
+            }
             let generic_type_name =
                 format_ident!("{}Builder_", field_name.to_string().to_class_case());
 
@@ -704,14 +715,37 @@ fn create_builder_and_constructor(
         quote! { #[doc(hidden)] }
     };
 
+    let constructor_fn = if make_async {
+        quote! { async fn new_async }
+    } else {
+        quote! { fn new }
+    };
     let constructor_def = quote! {
         #documentation
-        #visibility fn new(#(#params),*) -> Self {
+        #visibility #constructor_fn(#(#params),*) -> #struct_name <#(#generic_args),*> {
             #(#code)*
             unsafe { result.assume_init() }
         }
     };
     let generic_where = &generic_params.where_clause;
+    let builder_fn = if make_async {
+        quote! { async fn build }
+    } else {
+        quote! { fn build }
+    };
+    let builder_code = if make_async {
+        quote! {
+            #struct_name::new_async(
+                #(self.#builder_struct_field_names),*
+            ).await
+        }
+    } else {
+        quote! {
+            #struct_name::new(
+                #(self.#builder_struct_field_names),*
+            )
+        }
+    };
     let builder_def = quote! {
         #builder_documentation
         #visibility struct #builder_struct_name <#(#builder_struct_generic_producers),*> #generic_where {
@@ -719,10 +753,8 @@ fn create_builder_and_constructor(
         }
         impl<#(#builder_struct_generic_producers),*> #builder_struct_name <#(#builder_struct_generic_consumers),*> #generic_where {
             #[doc=#build_fn_documentation]
-            #visibility fn build(self) -> #struct_name <#(#generic_args),*> {
-                #struct_name::new(
-                    #(self.#builder_struct_field_names),*
-                )
+            #visibility #builder_fn(self) -> #struct_name <#(#generic_args),*> {
+                #builder_code
             }
         }
     };
@@ -1354,6 +1386,20 @@ fn self_referencing_impl(
         do_chain_hack,
         do_no_doc,
         do_pub_extras,
+        false,
+    )?;
+    let async_builder_struct_name = format_ident!("{}AsyncBuilder", struct_name);
+    let (async_builder_def, async_constructor_def) = create_builder_and_constructor(
+        &submodule_contents_visiblity,
+        &struct_name,
+        &async_builder_struct_name,
+        &generic_params,
+        &generic_args,
+        &field_info[..],
+        do_chain_hack,
+        do_no_doc,
+        do_pub_extras,
+        true,
     )?;
     let try_builder_struct_name = format_ident!("{}TryBuilder", struct_name);
     let (try_builder_def, try_constructor_def) = create_try_builder_and_constructor(
@@ -1401,11 +1447,13 @@ fn self_referencing_impl(
             use super::*;
             #actual_struct_def
             #builder_def
+            #async_builder_def
             #try_builder_def
             #with_all_struct_defs
             #heads_struct_def
             impl #generic_params #struct_name <#(#generic_args),*> #generic_where {
                 #constructor_def
+                #async_constructor_def
                 #try_constructor_def
                 #(#users)*
                 #with_all_fn_defs
@@ -1414,6 +1462,7 @@ fn self_referencing_impl(
         }
         #visibility use #mod_name :: #struct_name;
         #extra_visibility use #mod_name :: #builder_struct_name;
+        #extra_visibility use #mod_name :: #async_builder_struct_name;
         #extra_visibility use #mod_name :: #try_builder_struct_name;
     }))
 }
