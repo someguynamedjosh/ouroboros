@@ -5,8 +5,8 @@ use proc_macro2::{Group, Span, TokenTree};
 use proc_macro_error::proc_macro_error;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, PathArguments, Type,
-    Visibility,
+    Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, Lifetime, PathArguments,
+    Type, Visibility, WhereClause,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -61,7 +61,7 @@ impl StructFieldInfo {
     // ```rust
     // // Variable name taken from self.illegal_ref_name()
     // let test_illegal_static_reference = unsafe {
-    //     ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
+    //     ::ouroboros::macro_help::stable_deref_and_change_lifetime(
     //         &((*result.as_ptr()).field)
     //     )
     // };
@@ -71,7 +71,7 @@ impl StructFieldInfo {
         let ref_name = self.illegal_ref_name();
         quote! {
             let #ref_name = unsafe {
-                ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
+                ::ouroboros::macro_help::stable_deref_and_change_lifetime(
                     &((*result.as_ptr()).#field_name)
                 )
             };
@@ -84,7 +84,7 @@ impl StructFieldInfo {
         let ref_name = self.illegal_ref_name();
         quote! {
             let #ref_name = unsafe {
-                ::ouroboros::macro_help::stable_deref_and_strip_lifetime_mut(
+                ::ouroboros::macro_help::stable_deref_and_change_lifetime_mut(
                     &mut ((*result.as_mut_ptr()).#field_name)
                 )
             };
@@ -143,6 +143,7 @@ fn deref_type(field_type: &Type, do_chain_hack: bool) -> Result<TokenStream2, Er
 fn make_constructor_arg_type_impl(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
+    fake_lifetime: &Ident,
     make_builder_return_type: impl FnOnce() -> TokenStream2,
     do_chain_hack: bool,
 ) -> Result<ArgType, Error> {
@@ -150,7 +151,8 @@ fn make_constructor_arg_type_impl(
     if for_field.borrows.is_empty() {
         // Even if self_referencing is true, as long as borrows is empty, we don't need to use a
         // builder to construct it.
-        let field_type = replace_this_with_static(field_type.into_token_stream());
+        let field_type =
+            replace_this_with_lifetime(field_type.into_token_stream(), fake_lifetime.clone());
         Ok(ArgType::Plain(quote! { #field_type }))
     } else {
         let mut field_builder_params = Vec::new();
@@ -183,18 +185,22 @@ fn make_constructor_arg_type_impl(
 fn make_constructor_arg_type(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
+    fake_lifetime: &Ident,
     do_chain_hack: bool,
     make_async: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
-    let return_ty_constructor = || if make_async {
-        quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=#field_type> + 'this>> }
-    } else {
-        quote! { #field_type }
+    let return_ty_constructor = || {
+        if make_async {
+            quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=#field_type> + 'this>> }
+        } else {
+            quote! { #field_type }
+        }
     };
     make_constructor_arg_type_impl(
         for_field,
         other_fields,
+        fake_lifetime,
         return_ty_constructor,
         do_chain_hack,
     )
@@ -204,18 +210,22 @@ fn make_constructor_arg_type(
 fn make_try_constructor_arg_type(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
+    fake_lifetime: &Ident,
     do_chain_hack: bool,
     make_async: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
-    let return_ty_constructor = || if make_async {
-        quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + 'this>> }
-    } else {
-        quote! { ::core::result::Result<#field_type, Error_> }
+    let return_ty_constructor = || {
+        if make_async {
+            quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + 'this>> }
+        } else {
+            quote! { ::core::result::Result<#field_type, Error_> }
+        }
     };
     make_constructor_arg_type_impl(
         for_field,
         other_fields,
+        fake_lifetime,
         return_ty_constructor,
         do_chain_hack,
     )
@@ -250,20 +260,20 @@ fn make_template_consumers(generics: &Generics) -> impl Iterator<Item = (TokenSt
         })
 }
 
-fn replace_this_with_static(input: TokenStream2) -> TokenStream2 {
+fn replace_this_with_lifetime(input: TokenStream2, lifetime: Ident) -> TokenStream2 {
     input
         .into_iter()
         .map(|token| match &token {
             TokenTree::Ident(ident) => {
                 if ident == "this" {
-                    TokenTree::Ident(format_ident!("static"))
+                    TokenTree::Ident(lifetime.clone())
                 } else {
                     token
                 }
             }
             TokenTree::Group(group) => TokenTree::Group(Group::new(
                 group.delimiter(),
-                replace_this_with_static(group.stream()),
+                replace_this_with_lifetime(group.stream(), lifetime.clone()),
             )),
             _ => token,
         })
@@ -450,7 +460,7 @@ fn type_is_covariant(ty: &syn::Type, in_template: bool) -> bool {
 fn create_actual_struct(
     visibility: &Visibility,
     original_struct_def: &ItemStruct,
-) -> Result<(TokenStream2, Vec<StructFieldInfo>), Error> {
+) -> Result<(TokenStream2, Ident, Vec<StructFieldInfo>), Error> {
     let mut actual_struct_def = original_struct_def.clone();
     actual_struct_def.vis = visibility.clone();
     let mut field_info = Vec::new();
@@ -555,10 +565,19 @@ fn create_actual_struct(
         Fields::Unnamed(_fields) => unreachable!("Error handled earlier."),
         Fields::Unit => unreachable!("Error handled earlier."),
     }
-    // Finally, replace the fake 'this lifetime with 'static.
-    let actual_struct_def = replace_this_with_static(quote! { #actual_struct_def });
 
-    Ok((actual_struct_def, field_info))
+    let fake_lifetime =
+        if let Some(GenericParam::Lifetime(param)) = actual_struct_def.generics.params.first() {
+            param.lifetime.ident.clone()
+        } else {
+            format_ident!("static")
+        };
+
+    // Finally, replace the fake 'this lifetime with 'static.
+    let actual_struct_def =
+        replace_this_with_lifetime(quote! { #actual_struct_def }, fake_lifetime.clone());
+
+    Ok((actual_struct_def, fake_lifetime, field_info))
 }
 
 // Takes the generics parameters from the original struct and turns them into arguments.
@@ -584,6 +603,7 @@ fn create_builder_and_constructor(
     struct_visibility: &Visibility,
     struct_name: &Ident,
     builder_struct_name: &Ident,
+    fake_lifetime: &Ident,
     generic_params: &Generics,
     generic_args: &[TokenStream2],
     field_info: &[StructFieldInfo],
@@ -640,7 +660,13 @@ fn create_builder_and_constructor(
     for field in field_info {
         let field_name = &field.name;
 
-        let arg_type = make_constructor_arg_type(&field, &field_info[..], do_chain_hack, make_async)?;
+        let arg_type = make_constructor_arg_type(
+            &field,
+            &field_info[..],
+            fake_lifetime,
+            do_chain_hack,
+            make_async,
+        )?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -691,7 +717,7 @@ fn create_builder_and_constructor(
             builder_struct_field_names.push(quote! { #builder_name });
         }
         let field_type = &field.typ;
-        let field_type = replace_this_with_static(quote! { #field_type });
+        let field_type = replace_this_with_lifetime(quote! { #field_type }, fake_lifetime.clone());
         code.push(quote! { unsafe {
             ((&mut (*result.as_mut_ptr()).#field_name) as *mut #field_type).write(#field_name);
         }});
@@ -771,6 +797,7 @@ fn create_try_builder_and_constructor(
     struct_visibility: &Visibility,
     struct_name: &Ident,
     builder_struct_name: &Ident,
+    fake_lifetime: &Ident,
     generic_params: &Generics,
     generic_args: &[TokenStream2],
     field_info: &[StructFieldInfo],
@@ -858,7 +885,13 @@ fn create_try_builder_and_constructor(
     for field in field_info {
         let field_name = &field.name;
 
-        let arg_type = make_try_constructor_arg_type(&field, &field_info[..], do_chain_hack, make_async)?;
+        let arg_type = make_try_constructor_arg_type(
+            &field,
+            &field_info[..],
+            fake_lifetime,
+            do_chain_hack,
+            make_async,
+        )?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -922,7 +955,7 @@ fn create_try_builder_and_constructor(
             builder_struct_field_names.push(quote! { #builder_name });
         }
         let field_type = &field.typ;
-        let field_type = replace_this_with_static(quote! { #field_type });
+        let field_type = replace_this_with_lifetime(quote! { #field_type }, fake_lifetime.clone());
         let line = quote! { unsafe {
             ((&mut (*result.as_mut_ptr()).#field_name) as *mut #field_type).write(#field_name);
         }};
@@ -1176,6 +1209,7 @@ fn make_with_functions(
 fn make_with_all_function(
     struct_visibility: &syn::Visibility,
     struct_name: &Ident,
+    fake_lifetime: &Ident,
     field_info: &[StructFieldInfo],
     generic_params: &Generics,
     generic_args: &[TokenStream2],
@@ -1202,7 +1236,7 @@ fn make_with_all_function(
             mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
             let ass = quote! { #field_name: unsafe {
-                ::ouroboros::macro_help::stable_deref_and_strip_lifetime(
+                ::ouroboros::macro_help::stable_deref_and_change_lifetime(
                     &self.#field_name
                 )
             } };
@@ -1258,7 +1292,18 @@ fn make_with_all_function(
         ),
         struct_name.to_string()
     );
-    let generic_where = &generic_params.where_clause;
+    let ltname = format!("'{}", fake_lifetime);
+    let lifetime = Lifetime::new(&ltname, Span::call_site());
+    let generic_where = if let Some(clause) = &generic_params.where_clause {
+        let mut clause = clause.clone();
+        let extra: WhereClause = syn::parse_quote! { where #lifetime: 'this };
+        clause
+            .predicates
+            .push(extra.predicates.first().unwrap().clone());
+        clause
+    } else {
+        syn::parse_quote! { where #lifetime: 'this }
+    };
     let struct_defs = quote! {
         #[doc=#struct_documentation]
         #visibility struct BorrowedFields #new_generic_params #generic_where { #(#fields),* }
@@ -1433,7 +1478,7 @@ fn self_referencing_impl(
     let visibility = &original_struct_def.vis;
     let submodule_contents_visiblity = submodule_contents_visiblity(visibility);
 
-    let (actual_struct_def, field_info) =
+    let (actual_struct_def, fake_lifetime, field_info) =
         create_actual_struct(&submodule_contents_visiblity, &original_struct_def)?;
 
     let generic_params = original_struct_def.generics.clone();
@@ -1444,6 +1489,7 @@ fn self_referencing_impl(
         &submodule_contents_visiblity,
         &struct_name,
         &builder_struct_name,
+        &fake_lifetime,
         &generic_params,
         &generic_args,
         &field_info[..],
@@ -1457,6 +1503,7 @@ fn self_referencing_impl(
         &submodule_contents_visiblity,
         &struct_name,
         &async_builder_struct_name,
+        &fake_lifetime,
         &generic_params,
         &generic_args,
         &field_info[..],
@@ -1470,6 +1517,7 @@ fn self_referencing_impl(
         &submodule_contents_visiblity,
         &struct_name,
         &try_builder_struct_name,
+        &fake_lifetime,
         &generic_params,
         &generic_args,
         &field_info[..],
@@ -1483,6 +1531,7 @@ fn self_referencing_impl(
         &submodule_contents_visiblity,
         &struct_name,
         &async_try_builder_struct_name,
+        &fake_lifetime,
         &generic_params,
         &generic_args,
         &field_info[..],
@@ -1496,6 +1545,7 @@ fn self_referencing_impl(
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(
         &submodule_contents_visiblity,
         struct_name,
+        &fake_lifetime,
         &field_info[..],
         &generic_params,
         &generic_args,

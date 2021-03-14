@@ -203,6 +203,27 @@ fn self_reference_with() {
     assert_eq!(**bar.borrow_dref(), 123);
 }
 
+#[test]
+fn single_lifetime() {
+    #[self_referencing]
+    struct Struct<'a> {
+        external: &'a str,
+        #[borrows(external)]
+        internal: &'this &'a str,
+    }
+}
+
+#[test]
+fn double_lifetime() {
+    #[self_referencing]
+    struct Struct<'a, 'b: 'a> {
+        external: &'a str,
+        external2: &'b str,
+        #[borrows(external, external2)]
+        internal: &'this &'b str,
+    }
+}
+
 #[cfg(not(feature = "miri"))]
 mod compile_tests {
     /// Tests that all files in fail_tests fail to compile.
