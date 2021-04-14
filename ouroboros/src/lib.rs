@@ -292,6 +292,20 @@ pub mod macro_help {
     use stable_deref_trait::StableDeref;
     use std::ops::DerefMut;
 
+    pub struct CheckIfTypeIsStd<T>(std::marker::PhantomData<T>);
+
+    macro_rules! std_type_check {
+        ($fn_name:ident $T:ident $check_for:ty) => {
+            impl<$T> CheckIfTypeIsStd<$check_for> {
+                pub fn $fn_name() { }
+            }
+        }
+    }
+
+    std_type_check!(is_std_box_type T std::boxed::Box<T>);
+    std_type_check!(is_std_arc_type T std::sync::Arc<T>);
+    std_type_check!(is_std_rc_type T std::rc::Rc<T>);
+
     /// Converts a reference to an object implementing Deref to a static reference to the data it
     /// Derefs to. This is obviously unsafe because the compiler can no longer guarantee that the
     /// data outlives the reference. This function is templated to only work for containers that

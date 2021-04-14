@@ -1,0 +1,7 @@
+error[E0599]: no function or associated item named `is_std_box_type` found for struct `CheckIfTypeIsStd<Box<String>>` in the current scope
+  --> $DIR/refuse_non_std_box.rs:21:1
+   |
+21 | #[self_referencing]
+   | ^^^^^^^^^^^^^^^^^^^ function or associated item not found in `CheckIfTypeIsStd<Box<String>>`
+   |
+   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)

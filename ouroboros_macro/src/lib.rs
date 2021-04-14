@@ -5,8 +5,8 @@ use proc_macro2::{Group, Span, TokenTree};
 use proc_macro_error::proc_macro_error;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    Attribute, Error, Fields, GenericParam, Generics, Ident, ItemStruct, Lifetime, PathArguments,
-    Type, Visibility, WhereClause,
+    Attribute, Error, Fields, GenericArgument, GenericParam, Generics, Ident, ItemStruct, Lifetime,
+    PathArguments, Type, Visibility, WhereClause,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -107,6 +107,43 @@ impl StructFieldInfo {
     }
 }
 
+const STD_CONTAINER_TYPES: &[&str] = &["Box", "Arc", "Rc"];
+
+/// Returns Some((type_name, element_type)) if the provided type appears to be Box, Arc, or Rc from
+/// the standard library. Returns None if not.
+fn apparent_std_container_type(raw_type: &Type) -> Option<(&'static str, &Type)> {
+    let tpath = if let Type::Path(x) = raw_type {
+        x
+    } else {
+        return None;
+    };
+    let segment = if let Some(segment) = tpath.path.segments.last() {
+        segment
+    } else {
+        return None;
+    };
+    let args = if let PathArguments::AngleBracketed(args) = &segment.arguments {
+        args
+    } else {
+        return None;
+    };
+    if args.args.len() != 1 {
+        return None;
+    }
+    let arg = args.args.first().unwrap();
+    let eltype = if let GenericArgument::Type(x) = arg {
+        x
+    } else {
+        return None;
+    };
+    for type_name in STD_CONTAINER_TYPES {
+        if segment.ident == type_name {
+            return Some((type_name, eltype));
+        }
+    }
+    None
+}
+
 enum ArgType {
     /// Used when the initial value of a field can be passed directly into the constructor.
     Plain(TokenStream2),
@@ -117,16 +154,8 @@ enum ArgType {
 
 fn deref_type(field_type: &Type, do_chain_hack: bool) -> Result<TokenStream2, Error> {
     if do_chain_hack {
-        if let Type::Path(tpath) = field_type {
-            if let Some(segment) = tpath.path.segments.last() {
-                if segment.ident == "Box" || segment.ident == "Arc" || segment.ident == "Rc" {
-                    if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                        if let Some(arg) = args.args.first() {
-                            return Ok(quote! { #arg });
-                        }
-                    }
-                }
-            }
+        if let Some((_std_type, eltype)) = apparent_std_container_type(field_type) {
+            return Ok(quote! { #eltype });
         }
         Err(Error::new_spanned(
             &field_type,
@@ -399,11 +428,8 @@ fn type_is_covariant(ty: &syn::Type, in_template: bool) -> bool {
             }
             let mut is_covariant = false;
             // If the type is Box, Arc, or Rc, we can assume it to be covariant.
-            let last = path.path.segments.last();
-            if let Some(segment) = last {
-                if segment.ident == "Box" || segment.ident == "Arc" || segment.ident == "Rc" {
-                    is_covariant = true;
-                }
+            if apparent_std_container_type(ty).is_some() {
+                is_covariant = true;
             }
             for segment in path.path.segments.iter() {
                 let args = &segment.arguments;
@@ -1434,6 +1460,37 @@ fn make_into_heads(
     (heads_struct_def, into_heads_fn)
 }
 
+fn make_type_asserts(
+    field_info: &[StructFieldInfo],
+    generic_params: &Generics,
+    _generic_args: &[TokenStream2],
+) -> TokenStream2 {
+    let generic_where = &generic_params.where_clause;
+    let mut checks = Vec::new();
+    for field in field_info {
+        let field_type = &field.typ;
+        if let Some((std_type, _eltype)) = apparent_std_container_type(field_type) {
+            let checker_name = match std_type {
+                "Box" => "is_std_box_type",
+                "Arc" => "is_std_arc_type",
+                "Rc" => "is_std_rc_type",
+                _ => unreachable!(),
+            };
+            let checker_name = format_ident!("{}", checker_name);
+            let static_field_type =
+                replace_this_with_lifetime(quote! { #field_type }, format_ident!("static"));
+            checks.push(quote! {
+                ::ouroboros::macro_help::CheckIfTypeIsStd::<#static_field_type>::#checker_name();
+            });
+        }
+    }
+    quote! {
+        fn type_asserts #generic_params() #generic_where {
+            #(#checks)*
+        }
+    }
+}
+
 fn submodule_contents_visiblity(original_visibility: &Visibility) -> Visibility {
     match original_visibility {
         // inherited: allow parent of inner submodule to see
@@ -1561,6 +1618,9 @@ fn self_referencing_impl(
         do_no_doc,
         do_pub_extras,
     );
+    // These check that types like Box, Arc, and Rc refer to those types in the std lib and have not
+    // been overridden.
+    let type_asserts_def = make_type_asserts(&field_info[..], &generic_params, &generic_args);
 
     let extra_visibility = if do_pub_extras {
         visibility.clone()
@@ -1589,6 +1649,7 @@ fn self_referencing_impl(
                 #with_all_fn_defs
                 #into_heads_fn
             }
+            #type_asserts_def
         }
         #visibility use #mod_name :: #struct_name;
         #extra_visibility use #mod_name :: #builder_struct_name;
