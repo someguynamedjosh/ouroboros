@@ -1,6 +1,15 @@
+use std::fmt::Debug;
 use ouroboros::self_referencing;
 
 // All tests here should compile and run correctly and pass Miri's safety checks.
+
+#[self_referencing]
+struct TraitObject {
+    data: Box<dyn Debug>,
+    #[borrows(data)]
+    #[covariant]
+    dref: &'this dyn Debug,
+}
 
 #[self_referencing]
 struct BoxAndRef {

@@ -296,7 +296,7 @@ pub mod macro_help {
 
     macro_rules! std_type_check {
         ($fn_name:ident $T:ident $check_for:ty) => {
-            impl<$T> CheckIfTypeIsStd<$check_for> {
+            impl<$T: ?Sized> CheckIfTypeIsStd<$check_for> {
                 pub fn $fn_name() { }
             }
         }
