@@ -735,7 +735,7 @@ fn create_builder_and_constructor(
                 code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
             }
             let generic_type_name =
-                format_ident!("{}Builder_", field_name.to_string().to_class_case());
+                format_ident!("{}Builder_", to_class_case(field_name.to_string().as_str()));
 
             builder_struct_generic_producers.push(quote! { #generic_type_name: #bound_type });
             builder_struct_generic_consumers.push(quote! { #generic_type_name });
@@ -973,7 +973,7 @@ fn create_try_builder_and_constructor(
                 };
             });
             let generic_type_name =
-                format_ident!("{}Builder_", field_name.to_string().to_class_case());
+                format_ident!("{}Builder_", to_class_case(field_name.to_string().as_str()));
 
             builder_struct_generic_producers.push(quote! { #generic_type_name: #bound_type });
             builder_struct_generic_consumers.push(quote! { #generic_type_name });
@@ -1710,4 +1710,19 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
         Ok(content) => content,
         Err(err) => err.to_compile_error().into(),
     }
+}
+
+/// Functionality inspired by `Inflector`, reimplemented here to avoid the
+/// `regex` dependency.
+fn to_class_case(s: &str) -> String {
+    s.split('_')
+        .flat_map(|word| {
+            let mut chars = word.chars();
+            let first = chars.next();
+            first
+                .into_iter()
+                .map(|c| c.to_ascii_uppercase())
+                .chain(chars.map(|c| c.to_ascii_lowercase()))
+        })
+        .collect()
 }
