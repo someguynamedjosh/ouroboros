@@ -12,7 +12,7 @@ repository = "https://github.com/joshua-maros/ouroboros"
 proc-macro = true
 
 [dependencies]
-Inflector = "0.11"
+Inflector = { version = "0.11", default-features = false }
 proc-macro2 = "1.0"
 proc-macro-error = "1.0.4"
 quote = "1.0"
