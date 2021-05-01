@@ -1719,10 +1719,11 @@ fn to_class_case(s: &str) -> String {
         .flat_map(|word| {
             let mut chars = word.chars();
             let first = chars.next();
+            // Unicode allows for a single character to become multiple characters when converting between cases.
             first
                 .into_iter()
-                .map(|c| c.to_ascii_uppercase())
-                .chain(chars.map(|c| c.to_ascii_lowercase()))
+                .flat_map(|c| c.to_uppercase())
+                .chain(chars.flat_map(|c| c.to_lowercase()))
         })
         .collect()
 }
