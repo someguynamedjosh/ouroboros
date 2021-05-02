@@ -1118,22 +1118,36 @@ fn make_with_functions(
         // fields in the struct may have borrowed to ensure safety.
         if field.field_type == FieldType::Tail {
             let user_name = format_ident!("with_{}", &field.name);
-            let documentation = format!(
+            let borrow_documentation = format!(
                 concat!(
                     "Provides an immutable reference to `{0}`. This method was generated because ",
                     "`{0}` is a [tail field](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions)."
                 ),
                 field.name.to_string()
             );
-            let documentation = if !do_no_doc {
+            let borrow_documentation = if !do_no_doc {
                 quote! {
-                    #[doc=#documentation]
+                    #[doc=#borrow_documentation]
+                }
+            } else {
+                quote! { #[doc(hidden)] }
+            };
+            let take_documentation = format!(
+                concat!(
+                    "Provides full access to `{0}`. This method was generated because ",
+                    "`{0}` is a [tail field](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions)."
+                ),
+                field.name.to_string()
+            );
+            let take_documentation = if !do_no_doc {
+                quote! {
+                    #[doc=#take_documentation]
                 }
             } else {
                 quote! { #[doc(hidden)] }
             };
             users.push(quote! {
-                #documentation
+                #borrow_documentation
                 #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
@@ -1144,11 +1158,19 @@ fn make_with_functions(
             if field.covariant == Some(true) {
                 let borrower_name = format_ident!("borrow_{}", &field.name);
                 users.push(quote! {
-                    #documentation
+                    #borrow_documentation
                     #visibility fn #borrower_name<'this>(
                         &'this self,
                     ) -> &'this #field_type {
                         &self.#field_name
+                    }
+                });
+
+                let taker_name = format_ident!("take_{}", &field.name);
+                users.push(quote! {
+                    #take_documentation
+                    #visibility fn #taker_name<'this>(self) -> #field_type {
+                        self.#field_name
                     }
                 });
             } else if field.covariant.is_none() {
@@ -1183,22 +1205,36 @@ fn make_with_functions(
             });
         } else if field.field_type == FieldType::Borrowed {
             let user_name = format_ident!("with_{}", &field.name);
-            let documentation = format!(
+            let borrow_documentation = format!(
                 concat!(
                     "Provides limited immutable access to `{0}`. This method was generated ",
                     "because the contents of `{0}` are immutably borrowed by other fields."
                 ),
                 field.name.to_string()
             );
-            let documentation = if !do_no_doc {
+            let borrow_documentation = if !do_no_doc {
                 quote! {
-                    #[doc=#documentation]
+                    #[doc=#borrow_documentation]
+                }
+            } else {
+                quote! { #[doc(hidden)] }
+            };
+            let take_documentation = format!(
+                concat!(
+                    "Takes access to `{0}`. This method was generated because the ",
+                    "contents of `{0}` are immutably borrowed by other fields."
+                ),
+                field.name.to_string()
+            );
+            let take_documentation = if !do_no_doc {
+                quote! {
+                    #[doc=#take_documentation]
                 }
             } else {
                 quote! { #[doc(hidden)] }
             };
             users.push(quote! {
-                #documentation
+                #borrow_documentation
                 #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
@@ -1216,11 +1252,19 @@ fn make_with_functions(
             }
             let borrower_name = format_ident!("borrow_{}", &field.name);
             users.push(quote! {
-                #documentation
+                #borrow_documentation
                 #visibility fn #borrower_name<'this>(
                     &'this self,
                 ) -> &'this #field_type {
                     &self.#field_name
+                }
+            });
+
+            let taker_name = format_ident!("take_{}", &field.name);
+            users.push(quote! {
+                #take_documentation
+                #visibility fn #taker_name<'this>(self) -> #field_type {
+                    self.#field_name
                 }
             });
         } else if field.field_type == FieldType::BorrowedMut {
