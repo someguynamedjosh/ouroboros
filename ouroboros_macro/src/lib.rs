@@ -464,7 +464,6 @@ fn type_is_covariant(ty: &syn::Type, in_template: bool) -> bool {
         // Ignore the actual lifetime of the reference because Rust can automatically convert those.
         Reference(rf) => !in_template && type_is_covariant(&rf.elem, in_template),
         Slice(sl) => type_is_covariant(&sl.elem, in_template),
-        // I don't think this is reachable but panic just in case.
         TraitObject(..) => false,
         Tuple(tup) => {
             for ty in tup.elems.iter() {
