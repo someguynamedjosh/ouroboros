@@ -1,3 +1,5 @@
+extern crate proc_macro;
+
 use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
