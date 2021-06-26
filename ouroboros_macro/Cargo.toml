@@ -1,6 +1,6 @@
 [package]
 name = "ouroboros_macro"
-version = "0.9.4"
+version = "0.9.5"
 authors = ["Joshua Maros <joshua-maros@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
