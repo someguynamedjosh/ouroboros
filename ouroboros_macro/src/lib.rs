@@ -291,6 +291,25 @@ fn make_template_consumers(generics: &Generics) -> impl Iterator<Item = (TokenSt
         })
 }
 
+fn uses_this_lifetime(input: TokenStream2) -> bool {
+    for token in input.into_iter() {
+        match token {
+            TokenTree::Ident(ident) => {
+                if ident == "this" {
+                    return true;
+                }
+            }
+            TokenTree::Group(group) => {
+                if uses_this_lifetime(group.stream()) {
+                    return true;
+                }
+            }
+            _ => (),
+        }
+    }
+    false
+}
+
 fn replace_this_with_lifetime(input: TokenStream2, lifetime: Ident) -> TokenStream2 {
     input
         .into_iter()
@@ -402,6 +421,11 @@ fn handle_borrows_attr(
 /// Returns true if the specified type can be assumed to be covariant.
 fn type_is_covariant(ty: &syn::Type, in_template: bool) -> bool {
     use syn::Type::*;
+    // If the type never uses the 'this lifetime, we don't have to 
+    // worry about it not being covariant.
+    if !uses_this_lifetime(ty.to_token_stream()) {
+        return true;
+    }
     match ty {
         Array(arr) => type_is_covariant(&*arr.elem, in_template),
         BareFn(f) => {
