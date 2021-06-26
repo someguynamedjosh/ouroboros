@@ -42,6 +42,14 @@ struct BoxCheckWithLifetimeParameter<'t> {
     self_reference: Box<&'this &'t ()>,
 }
 
+#[self_referencing]
+struct AutoDetectCovarianceOnFieldsWithoutThis {
+    data: Box<()>,
+    unrelated_data: Box<i32>,
+    #[borrows(data)]
+    self_reference: Box<&'this ()>,
+}
+
 /// This test just makes sure that the macro copes with a ton of template parameters being thrown at
 /// it, specifically checking that the templates work fine even when a generated struct doesn't need
 /// all of them. (E.G. heads will only contain 'd, A, and B.)
