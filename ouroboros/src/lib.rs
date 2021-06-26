@@ -76,54 +76,6 @@
 ///
 /// Violating them will result in an error message directly pointing out the violated rule.
 ///
-/// # Async usage
-/// All self-referencing structs can be initialized asynchronously by using either the
-/// `MyStruct::new_async()` function or the `MyStructAsyncBuilder` builder. Due to limitations of
-/// the rust compiler you closures must return a Future trait object wrapped in a `Pin<Box<_>>`.
-///
-/// Here is the same example as above in its async version:
-///
-/// ```ignore
-/// use ouroboros::self_referencing;
-///
-/// #[self_referencing]
-/// struct MyStruct {
-///     int_data: Box<i32>,
-///     float_data: Box<f32>,
-///     #[borrows(int_data)]
-///     int_reference: &'this i32,
-///     #[borrows(mut float_data)]
-///     float_reference: &'this mut f32,
-/// }
-///
-/// #[tokio::main]
-/// async fn main() {
-///     let mut my_value = MyStructAsyncBuilder {
-///         int_data: Box::new(42),
-///         float_data: Box::new(3.14),
-///         int_reference_builder: |int_data: &i32| Box::pin(async move { int_data }),
-///         float_reference_builder: |float_data: &mut f32| Box::pin( async move { float_data }),
-///     }.build().await;
-///
-///     // Prints 42
-///     println!("{:?}", my_value.borrow_int_data());
-///     // Prints 3.14
-///     println!("{:?}", my_value.borrow_float_reference());
-///     // Sets the value of float_data to 84.0
-///     my_value.with_mut(|fields| {
-///         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
-///     });
-///
-///     // We can hold on to this reference...
-///     let int_ref = *my_value.borrow_int_reference();
-///     println!("{:?}", *int_ref);
-///     // As long as the struct is still alive.
-///     drop(my_value);
-///     // This will cause an error!
-///     // println!("{:?}", *int_ref);
-/// }
-/// ```
-///
 /// # Flexibility of this crate
 /// The example above uses plain references as the self-referencing part of the struct, but you can
 /// use anything that is dependent on lifetimes of objects inside the struct. For example, you could
@@ -176,6 +128,12 @@
 ///     });
 /// }
 /// ```
+///
+/// # Note on memory leaks
+/// Currently, if a builder panics when creating a field, all previous fields will be leaked. This
+/// does not cause any undefined behavior. This behavior may be resolved in the future so that all
+/// previous fields are dropped when a builder panics.
+///
 /// # Covariance
 /// Many types in Rust have a property called "covariance". In practical tearms, this means that a
 /// covariant type like `Box<&'this i32>` can be used as a `Box<&'a i32>` as long as `'a` is
@@ -201,6 +159,54 @@
 /// configurations may produce strange compiler errors. If you find such a configuration, please
 /// open an issue on the [Github repository](https://github.com/joshua-maros/ouroboros/issues).
 /// You can view a documented example of a struct which uses `chain_hack` [here](https://docs.rs/ouroboros_examples/latest/ouroboros_examples/struct.ChainHack.html).
+///
+/// # Async usage
+/// All self-referencing structs can be initialized asynchronously by using either the
+/// `MyStruct::new_async()` function or the `MyStructAsyncBuilder` builder. Due to limitations of
+/// the rust compiler you closures must return a Future trait object wrapped in a `Pin<Box<_>>`.
+///
+/// Here is the same example as above in its async version:
+///
+/// ```ignore
+/// use ouroboros::self_referencing;
+///
+/// #[self_referencing]
+/// struct MyStruct {
+///     int_data: Box<i32>,
+///     float_data: Box<f32>,
+///     #[borrows(int_data)]
+///     int_reference: &'this i32,
+///     #[borrows(mut float_data)]
+///     float_reference: &'this mut f32,
+/// }
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let mut my_value = MyStructAsyncBuilder {
+///         int_data: Box::new(42),
+///         float_data: Box::new(3.14),
+///         int_reference_builder: |int_data: &i32| Box::pin(async move { int_data }),
+///         float_reference_builder: |float_data: &mut f32| Box::pin(async move { float_data }),
+///     }.build().await;
+///
+///     // Prints 42
+///     println!("{:?}", my_value.borrow_int_data());
+///     // Prints 3.14
+///     println!("{:?}", my_value.borrow_float_reference());
+///     // Sets the value of float_data to 84.0
+///     my_value.with_mut(|fields| {
+///         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
+///     });
+///
+///     // We can hold on to this reference...
+///     let int_ref = *my_value.borrow_int_reference();
+///     println!("{:?}", *int_ref);
+///     // As long as the struct is still alive.
+///     drop(my_value);
+///     // This will cause an error!
+///     // println!("{:?}", *int_ref);
+/// }
+/// ```
 ///
 /// # What does the macro generate?
 /// The `#[self_referencing]` struct will replace your definition with an unsafe self-referencing
