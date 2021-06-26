@@ -1,5 +1,5 @@
-use std::fmt::Debug;
 use ouroboros::self_referencing;
+use std::fmt::Debug;
 
 // All tests here should compile and run correctly and pass Miri's safety checks.
 
@@ -32,6 +32,14 @@ struct ChainedAndUndocumented {
     ref1: Box<&'this i32>,
     #[borrows(data)]
     ref2: &'this &'this i32,
+}
+
+#[self_referencing]
+struct BoxCheckWithLifetimeParameter<'t> {
+    external_data: Box<&'t ()>,
+    #[borrows(external_data)]
+    #[covariant]
+    self_reference: Box<&'this &'t ()>,
 }
 
 /// This test just makes sure that the macro copes with a ton of template parameters being thrown at
@@ -71,7 +79,7 @@ fn box_and_ref() {
 async fn async_new() {
     let bar = BoxAndRefAsyncBuilder {
         data: Box::new(12),
-        dref_builder: |data| Box::pin(async move { data })
+        dref_builder: |data| Box::pin(async move { data }),
     }
     .build()
     .await;
@@ -86,7 +94,7 @@ async fn async_new() {
 async fn async_try_new() {
     let bar = BoxAndRefAsyncTryBuilder {
         data: Box::new(12),
-        dref_builder: |data| Box::pin(async move { Result::<_, ()>::Ok(data) })
+        dref_builder: |data| Box::pin(async move { Result::<_, ()>::Ok(data) }),
     }
     .try_build()
     .await
@@ -102,7 +110,7 @@ async fn async_try_new() {
 async fn async_try_new_err() {
     let result = BoxAndRefAsyncTryBuilder {
         data: Box::new(12),
-        dref_builder: |_data| Box::pin(async move { Err(56u64) })
+        dref_builder: |_data| Box::pin(async move { Err(56u64) }),
     }
     .try_build()
     .await;

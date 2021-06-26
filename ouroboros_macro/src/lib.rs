@@ -1468,6 +1468,11 @@ fn make_type_asserts(
 ) -> TokenStream2 {
     let generic_where = &generic_params.where_clause;
     let mut checks = Vec::new();
+    let fake_lifetime = if let Some(GenericParam::Lifetime(param)) = generic_params.params.first() {
+        param.lifetime.ident.clone()
+    } else {
+        format_ident!("static")
+    };
     for field in field_info {
         let field_type = &field.typ;
         if let Some((std_type, _eltype)) = apparent_std_container_type(field_type) {
@@ -1479,7 +1484,7 @@ fn make_type_asserts(
             };
             let checker_name = format_ident!("{}", checker_name);
             let static_field_type =
-                replace_this_with_lifetime(quote! { #field_type }, format_ident!("static"));
+                replace_this_with_lifetime(quote! { #field_type }, fake_lifetime.clone());
             checks.push(quote! {
                 ::ouroboros::macro_help::CheckIfTypeIsStd::<#static_field_type>::#checker_name();
             });
