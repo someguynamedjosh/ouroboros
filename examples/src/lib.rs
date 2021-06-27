@@ -1,6 +1,4 @@
 use ouroboros::self_referencing;
-use std::rc::Rc;
-use std::sync::Arc;
 
 #[cfg(test)]
 mod ok_tests;
@@ -13,24 +11,22 @@ pub struct BoxAndRef {
     data_ref: &'this i32,
 }
 
-#[self_referencing(chain_hack)]
+#[self_referencing()]
 #[allow(clippy::redundant_allocation)]
-/// A chain of references, where c references b which references a. This is an example of a struct
-/// which requires using [chain_hack](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#using-chain_hack)
-/// as of the time this was written.
-pub struct ChainHack {
-    a: Box<i32>,
+/// A chain of references, where c references b which references a.
+pub struct Chain {
+    a: i32,
     #[borrows(a)]
-    b: Arc<&'this i32>,
+    b: &'this i32,
     #[borrows(b)]
-    c: Rc<&'this i32>,
+    c: &'this i32,
 }
 
 #[self_referencing]
 /// The example provided in the documentation.
 pub struct DocumentationExample {
-    int_data: Box<i32>,
-    float_data: Box<f32>,
+    int_data: i32,
+    float_data: f32,
     #[borrows(int_data)]
     int_reference: &'this i32,
     #[borrows(mut float_data)]

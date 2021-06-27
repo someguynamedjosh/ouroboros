@@ -57,6 +57,19 @@ impl StructFieldInfo {
         format_ident!("{}_illegal_static_reference", self.name)
     }
 
+    fn is_borrowed(&self) -> bool {
+        self.field_type != FieldType::Tail
+    }
+
+    fn stored_type(&self) -> TokenStream2 {
+        let t = &self.typ;
+        if self.is_borrowed() {
+            quote! { ::ouroboros::macro_help::AliasableBox<#t> }
+        } else {
+            quote! { #t }
+        }
+    }
+
     // Returns code which takes a variable with the same name and type as this field and turns it
     // into a static reference to its dereffed contents. For example, suppose a field
     // `test: Box<i32>`. This method would generate code that looks like:
@@ -73,9 +86,7 @@ impl StructFieldInfo {
         let ref_name = self.illegal_ref_name();
         quote! {
             let #ref_name = unsafe {
-                ::ouroboros::macro_help::stable_deref_and_change_lifetime(
-                    &((*result.as_ptr()).#field_name)
-                )
+                ::ouroboros::macro_help::stable_deref_and_change_lifetime(&#field_name)
             };
         }
     }
@@ -86,9 +97,7 @@ impl StructFieldInfo {
         let ref_name = self.illegal_ref_name();
         quote! {
             let #ref_name = unsafe {
-                ::ouroboros::macro_help::stable_deref_and_change_lifetime_mut(
-                    &mut ((*result.as_mut_ptr()).#field_name)
-                )
+                ::ouroboros::macro_help::stable_deref_and_change_lifetime_mut(&mut #field_name)
             };
         }
     }
@@ -154,29 +163,11 @@ enum ArgType {
     TraitBound(TokenStream2),
 }
 
-fn deref_type(field_type: &Type, do_chain_hack: bool) -> Result<TokenStream2, Error> {
-    if do_chain_hack {
-        if let Some((_std_type, eltype)) = apparent_std_container_type(field_type) {
-            return Ok(quote! { #eltype });
-        }
-        Err(Error::new_spanned(
-            &field_type,
-            concat!(
-                "Borrowed fields must be of type Box<T>, Arc<T>, or Rc<T> when chain_hack is ",
-                "used. Either change the field to one of the listed types or remove chain_hack."
-            ),
-        ))
-    } else {
-        Ok(quote! { <#field_type as ::core::ops::Deref>::Target })
-    }
-}
-
 fn make_constructor_arg_type_impl(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
     fake_lifetime: &Ident,
     make_builder_return_type: impl FnOnce() -> TokenStream2,
-    do_chain_hack: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
     if for_field.borrows.is_empty() {
@@ -191,16 +182,14 @@ fn make_constructor_arg_type_impl(
             if borrow.mutable {
                 let field = &other_fields[borrow.index];
                 let field_type = &field.typ;
-                let content_type = deref_type(field_type, do_chain_hack)?;
                 field_builder_params.push(quote! {
-                    &'this mut #content_type
+                    &'this mut #field_type
                 });
             } else {
                 let field = &other_fields[borrow.index];
                 let field_type = &field.typ;
-                let content_type = deref_type(field_type, do_chain_hack)?;
                 field_builder_params.push(quote! {
-                    &'this #content_type
+                    &'this #field_type
                 });
             }
         }
@@ -217,7 +206,6 @@ fn make_constructor_arg_type(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
     fake_lifetime: &Ident,
-    do_chain_hack: bool,
     make_async: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
@@ -233,7 +221,6 @@ fn make_constructor_arg_type(
         other_fields,
         fake_lifetime,
         return_ty_constructor,
-        do_chain_hack,
     )
 }
 
@@ -242,7 +229,6 @@ fn make_try_constructor_arg_type(
     for_field: &StructFieldInfo,
     other_fields: &[StructFieldInfo],
     fake_lifetime: &Ident,
-    do_chain_hack: bool,
     make_async: bool,
 ) -> Result<ArgType, Error> {
     let field_type = &for_field.typ;
@@ -258,7 +244,6 @@ fn make_try_constructor_arg_type(
         other_fields,
         fake_lifetime,
         return_ty_constructor,
-        do_chain_hack,
     )
 }
 
@@ -421,7 +406,7 @@ fn handle_borrows_attr(
 /// Returns true if the specified type can be assumed to be covariant.
 fn type_is_covariant(ty: &syn::Type, in_template: bool) -> bool {
     use syn::Type::*;
-    // If the type never uses the 'this lifetime, we don't have to 
+    // If the type never uses the 'this lifetime, we don't have to
     // worry about it not being covariant.
     if !uses_this_lifetime(ty.to_token_stream()) {
         return true;
@@ -512,6 +497,8 @@ fn create_actual_struct(
     visibility: &Visibility,
     original_struct_def: &ItemStruct,
 ) -> Result<(TokenStream2, Ident, Vec<StructFieldInfo>), Error> {
+    let type_name = original_struct_def.ident.clone();
+    let generics = original_struct_def.generics.clone();
     let mut actual_struct_def = original_struct_def.clone();
     actual_struct_def.vis = visibility.clone();
     let mut field_info = Vec::new();
@@ -548,14 +535,9 @@ fn create_actual_struct(
                         remove_attrs.push(index);
                     }
                 }
-                for index in remove_attrs.into_iter().rev() {
-                    field.attrs.remove(index);
-                }
-                field.attrs.push(syn::parse_quote! { #[doc(hidden)] });
                 // We should not be able to access the field outside of the hidden module where
                 // everything is generated.
                 let with_vis = submodule_contents_visiblity(&field.vis.clone());
-                field.vis = syn::Visibility::Inherited;
                 field_info.push(StructFieldInfo {
                     name: field.ident.clone().expect("Named field has no name."),
                     typ: field.ty.clone(),
@@ -608,25 +590,45 @@ fn create_actual_struct(
     // Reverse the order of all fields. We ensure that items in the struct are only dependent
     // on references to items above them. Rust drops items in a struct in forward declaration order.
     // This would cause parents being dropped before children, necessitating the reversal.
-    match &mut actual_struct_def.fields {
-        Fields::Named(fields) => {
-            let reversed = fields.named.iter().rev().cloned().collect();
-            fields.named = reversed;
-        }
-        Fields::Unnamed(_fields) => unreachable!("Error handled earlier."),
-        Fields::Unit => unreachable!("Error handled earlier."),
-    }
+    field_info.reverse();
 
+    let actual_fields: Vec<_> = field_info
+        .iter()
+        .map(|field| {
+            let name = &field.name;
+            let ty = field.stored_type();
+            quote! {
+                #[doc(hidden)]
+                #name: #ty
+            }
+        })
+        .collect();
+
+    // Create the new struct definition.
+    let mut where_clause = quote! { };
+    if let Some(clause) = &generics.where_clause {
+        where_clause = quote! { #clause };
+    }
+    let actual_struct_def = quote! {
+        #visibility struct #type_name #generics #where_clause {
+            #(#actual_fields),*
+        }
+    };
+
+    // Figure out what lifetime we should use for 'this.
     let fake_lifetime =
-        if let Some(GenericParam::Lifetime(param)) = actual_struct_def.generics.params.first() {
+        if let Some(GenericParam::Lifetime(param)) = original_struct_def.generics.params.first() {
             param.lifetime.ident.clone()
         } else {
             format_ident!("static")
         };
 
-    // Finally, replace the fake 'this lifetime with 'static.
+    // Finally, replace the fake 'this lifetime with the one we found.
     let actual_struct_def =
         replace_this_with_lifetime(quote! { #actual_struct_def }, fake_lifetime.clone());
+
+    // Put the field info list back in the order the fields were defined in.
+    field_info.reverse();
 
     Ok((actual_struct_def, fake_lifetime, field_info))
 }
@@ -658,7 +660,6 @@ fn create_builder_and_constructor(
     generic_params: &Generics,
     generic_args: &[TokenStream2],
     field_info: &[StructFieldInfo],
-    do_chain_hack: bool,
     do_no_doc: bool,
     do_pub_extras: bool,
     make_async: bool,
@@ -706,18 +707,13 @@ fn create_builder_and_constructor(
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
-    code.push(quote! { let mut result = ::core::mem::MaybeUninit::<Self>::uninit(); });
+    // code.push(quote! { let mut result = ::core::mem::MaybeUninit::<Self>::uninit(); });
 
     for field in field_info {
         let field_name = &field.name;
 
-        let arg_type = make_constructor_arg_type(
-            &field,
-            &field_info[..],
-            fake_lifetime,
-            do_chain_hack,
-            make_async,
-        )?;
+        let arg_type =
+            make_constructor_arg_type(&field, &field_info[..], fake_lifetime, make_async)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -767,11 +763,14 @@ fn create_builder_and_constructor(
             builder_struct_fields.push(quote! { #builder_name: #generic_type_name });
             builder_struct_field_names.push(quote! { #builder_name });
         }
-        let field_type = &field.typ;
-        let field_type = replace_this_with_lifetime(quote! { #field_type }, fake_lifetime.clone());
-        code.push(quote! { unsafe {
-            ((&mut (*result.as_mut_ptr()).#field_name) as *mut #field_type).write(#field_name);
-        }});
+        if field.is_borrowed() {
+            let boxed = quote! { ::ouroboros::macro_help::aliasable_boxed(#field_name) };
+            if field.field_type == FieldType::BorrowedMut {
+                code.push(quote! { let mut #field_name = #boxed; });
+            } else {
+                code.push(quote! { let #field_name = #boxed; });
+            }
+        };
 
         if field.field_type == FieldType::Borrowed {
             code.push(field.make_illegal_static_reference());
@@ -803,11 +802,14 @@ fn create_builder_and_constructor(
     } else {
         quote! { fn new }
     };
+    let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
     let constructor_def = quote! {
         #documentation
         #visibility #constructor_fn(#(#params),*) -> #struct_name <#(#generic_args),*> {
             #(#code)*
-            unsafe { result.assume_init() }
+            Self {
+                #(#field_names),*
+            }
         }
     };
     let generic_where = &generic_params.where_clause;
@@ -852,7 +854,6 @@ fn create_try_builder_and_constructor(
     generic_params: &Generics,
     generic_args: &[TokenStream2],
     field_info: &[StructFieldInfo],
-    do_chain_hack: bool,
     do_no_doc: bool,
     do_pub_extras: bool,
     make_async: bool,
@@ -931,18 +932,11 @@ fn create_try_builder_and_constructor(
     let mut builder_struct_fields = Vec::new();
     let mut builder_struct_field_names = Vec::new();
 
-    or_recover_code.push(quote! { let mut result = ::core::mem::MaybeUninit::<Self>::uninit(); });
-
     for field in field_info {
         let field_name = &field.name;
 
-        let arg_type = make_try_constructor_arg_type(
-            &field,
-            &field_info[..],
-            fake_lifetime,
-            do_chain_hack,
-            make_async,
-        )?;
+        let arg_type =
+            make_try_constructor_arg_type(&field, &field_info[..], fake_lifetime, make_async)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -953,9 +947,13 @@ fn create_try_builder_and_constructor(
                 field_name.to_string()
             );
             if !field.self_referencing {
-                head_recover_code[current_head_index] = quote! {
-                    #field_name: unsafe { ::core::ptr::read(&(*result.as_ptr()).#field_name as *const _) }
-                };
+                if field.is_borrowed() {
+                    head_recover_code[current_head_index] = quote! {
+                        #field_name: ::ouroboros::macro_help::unbox(#field_name)
+                    };
+                } else {
+                    head_recover_code[current_head_index] = quote! { #field_name };
+                }
                 current_head_index += 1;
             }
         } else if let ArgType::TraitBound(bound_type) = arg_type {
@@ -1005,12 +1003,14 @@ fn create_try_builder_and_constructor(
             builder_struct_fields.push(quote! { #builder_name: #generic_type_name });
             builder_struct_field_names.push(quote! { #builder_name });
         }
-        let field_type = &field.typ;
-        let field_type = replace_this_with_lifetime(quote! { #field_type }, fake_lifetime.clone());
-        let line = quote! { unsafe {
-            ((&mut (*result.as_mut_ptr()).#field_name) as *mut #field_type).write(#field_name);
-        }};
-        or_recover_code.push(line);
+        if field.is_borrowed() {
+            let boxed = quote! { ::ouroboros::macro_help::aliasable_boxed(#field_name) };
+            if field.field_type == FieldType::BorrowedMut {
+                or_recover_code.push(quote! { let mut #field_name = #boxed; });
+            } else {
+                or_recover_code.push(quote! { let #field_name = #boxed; });
+            }
+        }
 
         if field.field_type == FieldType::Borrowed {
             or_recover_code.push(field.make_illegal_static_reference());
@@ -1062,6 +1062,7 @@ fn create_try_builder_and_constructor(
     } else {
         quote! { #struct_name::#or_recover_ident(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error) }
     };
+    let field_names: Vec<_> = field_info.iter().map(|field| field.name.clone()).collect();
     let constructor_def = quote! {
         #documentation
         #visibility #constructor_fn<Error_>(#(#params),*) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
@@ -1070,7 +1071,7 @@ fn create_try_builder_and_constructor(
         #or_recover_documentation
         #visibility #or_recover_constructor_fn<Error_>(#(#params),*) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
-            ::core::result::Result::Ok(unsafe { result.assume_init() })
+            ::core::result::Result::Ok(Self { #(#field_names),* })
         }
     };
     builder_struct_generic_producers.push(quote! { Error_ });
@@ -1229,7 +1230,7 @@ fn make_with_functions(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
                 ) -> ReturnType {
-                    user(&self.#field_name)
+                    user(&*self.#field_name)
                 }
             });
             if field.self_referencing {
@@ -1246,7 +1247,7 @@ fn make_with_functions(
                 #visibility fn #borrower_name<'this>(
                     &'this self,
                 ) -> &'this #field_type {
-                    &self.#field_name
+                    &*self.#field_name
                 }
             });
         } else if field.field_type == FieldType::BorrowedMut {
@@ -1291,10 +1292,9 @@ fn make_with_all_function(
                     &self.#field_name
                 )
             } };
-            let deref_type = quote! { <#field_type as ::std::ops::Deref>::Target };
-            fields.push(quote! { #visibility #field_name: &'this #deref_type });
+            fields.push(quote! { #visibility #field_name: &'this #field_type });
             field_assignments.push(ass.clone());
-            mut_fields.push(quote! { #visibility #field_name: &'this #deref_type });
+            mut_fields.push(quote! { #visibility #field_name: &'this #field_type });
             mut_field_assignments.push(ass);
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
@@ -1432,7 +1432,12 @@ fn make_into_heads(
         let field_name = &field.name;
         if !field.self_referencing {
             code.push(quote! { let #field_name = self.#field_name; });
-            field_initializers.push(quote! { #field_name });
+            if field.is_borrowed() {
+                field_initializers
+                    .push(quote! { #field_name: ::ouroboros::macro_help::unbox(#field_name) });
+            } else {
+                field_initializers.push(quote! { #field_name });
+            }
             let field_type = &field.typ;
             head_fields.push(quote! { #visibility #field_name: #field_type });
         } else {
@@ -1556,7 +1561,6 @@ fn submodule_contents_visiblity(original_visibility: &Visibility) -> Visibility 
 
 fn self_referencing_impl(
     original_struct_def: ItemStruct,
-    do_chain_hack: bool,
     do_no_doc: bool,
     do_pub_extras: bool,
 ) -> Result<TokenStream, Error> {
@@ -1580,7 +1584,6 @@ fn self_referencing_impl(
         &generic_params,
         &generic_args,
         &field_info[..],
-        do_chain_hack,
         do_no_doc,
         do_pub_extras,
         false,
@@ -1594,7 +1597,6 @@ fn self_referencing_impl(
         &generic_params,
         &generic_args,
         &field_info[..],
-        do_chain_hack,
         do_no_doc,
         do_pub_extras,
         true,
@@ -1608,7 +1610,6 @@ fn self_referencing_impl(
         &generic_params,
         &generic_args,
         &field_info[..],
-        do_chain_hack,
         do_no_doc,
         do_pub_extras,
         false,
@@ -1622,7 +1623,6 @@ fn self_referencing_impl(
         &generic_params,
         &generic_args,
         &field_info[..],
-        do_chain_hack,
         do_no_doc,
         do_pub_extras,
         true,
@@ -1692,7 +1692,6 @@ fn self_referencing_impl(
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut do_chain_hack = false;
     let mut do_no_doc = false;
     let mut do_pub_extras = false;
     let mut expecting_comma = false;
@@ -1704,13 +1703,12 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
                     .into();
             }
             match &ident.to_string()[..] {
-                "chain_hack" => do_chain_hack = true,
                 "no_doc" => do_no_doc = true,
                 "pub_extras" => do_pub_extras = true,
                 _ => {
                     return Error::new_spanned(
                         &ident,
-                        "Unknown identifier, expected 'chain_hack', 'no_doc', or 'pub_extras'.",
+                        "Unknown identifier, expected 'no_doc' or 'pub_extras'.",
                     )
                     .to_compile_error()
                     .into()
@@ -1736,7 +1734,7 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     let original_struct_def: ItemStruct = syn::parse_macro_input!(item);
-    match self_referencing_impl(original_struct_def, do_chain_hack, do_no_doc, do_pub_extras) {
+    match self_referencing_impl(original_struct_def, do_no_doc, do_pub_extras) {
         Ok(content) => content,
         Err(err) => err.to_compile_error().into(),
     }

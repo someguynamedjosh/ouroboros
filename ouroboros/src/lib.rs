@@ -11,8 +11,8 @@
 ///
 /// #[self_referencing]
 /// struct MyStruct {
-///     int_data: Box<i32>,
-///     float_data: Box<f32>,
+///     int_data: i32,
+///     float_data: f32,
 ///     #[borrows(int_data)]
 ///     int_reference: &'this i32,
 ///     #[borrows(mut float_data)]
@@ -21,8 +21,8 @@
 ///
 /// fn main() {
 ///     let mut my_value = MyStructBuilder {
-///         int_data: Box::new(42),
-///         float_data: Box::new(3.14),
+///         int_data: 42,
+///         float_data: 3.14,
 ///         int_reference_builder: |int_data: &i32| int_data,
 ///         float_reference_builder: |float_data: &mut f32| float_data,
 ///     }.build();
@@ -108,16 +108,16 @@
 /// fn main() {
 ///     #[self_referencing]
 ///     struct DataStorage {
-///         immutable: Box<i32>,
-///         mutable: Box<i32>,
+///         immutable: i32,
+///         mutable: i32,
 ///         #[borrows(immutable, mut mutable)]
 ///         #[covariant]
 ///         complex_data: ComplexData<'this, 'this>,
 ///     }
 ///
 ///     let mut data_storage = DataStorageBuilder {
-///         immutable: Box::new(10),
-///         mutable: Box::new(20),
+///         immutable: 10,
+///         mutable: 20,
 ///         complex_data_builder: |i: &i32, m: &mut i32| ComplexData::new(i, m, 12345),
 ///     }.build();
 ///     data_storage.with_complex_data_mut(|data| {
@@ -295,22 +295,30 @@ pub use ouroboros_macro::self_referencing;
 
 #[doc(hidden)]
 pub mod macro_help {
-    use stable_deref_trait::StableDeref;
-    use std::ops::DerefMut;
+    pub use aliasable::boxed::AliasableBox;
+    use aliasable::boxed::UniqueBox;
 
     pub struct CheckIfTypeIsStd<T>(std::marker::PhantomData<T>);
 
     macro_rules! std_type_check {
         ($fn_name:ident $T:ident $check_for:ty) => {
             impl<$T: ?Sized> CheckIfTypeIsStd<$check_for> {
-                pub fn $fn_name() { }
+                pub fn $fn_name() {}
             }
-        }
+        };
     }
 
     std_type_check!(is_std_box_type T std::boxed::Box<T>);
     std_type_check!(is_std_arc_type T std::sync::Arc<T>);
     std_type_check!(is_std_rc_type T std::rc::Rc<T>);
+
+    pub fn aliasable_boxed<T>(data: T) -> AliasableBox<T> {
+        AliasableBox::from_unique(UniqueBox::new(data))
+    }
+
+    pub fn unbox<T>(boxed: AliasableBox<T>) -> T {
+        *AliasableBox::into_unique(boxed)
+    }
 
     /// Converts a reference to an object implementing Deref to a static reference to the data it
     /// Derefs to. This is obviously unsafe because the compiler can no longer guarantee that the
@@ -325,9 +333,9 @@ pub mod macro_help {
     ///
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
-    pub unsafe fn stable_deref_and_change_lifetime<'old, 'new: 'old, T: StableDeref + 'new>(
-        data: &'old T,
-    ) -> &'new T::Target {
+    pub unsafe fn stable_deref_and_change_lifetime<'old, 'new: 'old, T: 'new>(
+        data: &'old AliasableBox<T>,
+    ) -> &'new T {
         &*((&**data) as *const _)
     }
 
@@ -337,13 +345,9 @@ pub mod macro_help {
     ///
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
-    pub unsafe fn stable_deref_and_change_lifetime_mut<
-        'old,
-        'new: 'old,
-        T: StableDeref + DerefMut + 'new,
-    >(
-        data: &'old mut T,
-    ) -> &'new mut T::Target {
+    pub unsafe fn stable_deref_and_change_lifetime_mut<'old, 'new: 'old, T: 'new>(
+        data: &'old mut AliasableBox<T>,
+    ) -> &'new mut T {
         &mut *((&mut **data) as *mut _)
     }
 }

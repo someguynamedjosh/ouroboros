@@ -10,5 +10,6 @@ documentation = "https://docs.rs/ouroboros"
 repository = "https://github.com/joshua-maros/ouroboros"
 
 [dependencies]
+aliasable = "0.1.3"
 ouroboros_macro = { version = "0.9.5", path = "../ouroboros_macro" }
 stable_deref_trait = "1.2"

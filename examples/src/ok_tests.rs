@@ -13,7 +13,7 @@ struct TraitObject {
 
 #[self_referencing]
 struct BoxAndRef {
-    data: Box<i32>,
+    data: i32,
     #[borrows(data)]
     dref: &'this i32,
 }
@@ -25,7 +25,7 @@ struct BoxAndMutRef {
     dref: &'this mut i32,
 }
 
-#[self_referencing(chain_hack, no_doc)]
+#[self_referencing(no_doc)]
 struct ChainedAndUndocumented {
     data: Box<i32>,
     #[borrows(data)]
@@ -61,10 +61,10 @@ where
     C: 'static,
 {
     external: &'d A,
-    data1: Box<B>,
+    data1: B,
     #[borrows(data1)]
     data2: &'this C,
-    data3: Box<B>,
+    data3: B,
     #[borrows(mut data3)]
     data4: &'this mut C,
 }
@@ -72,7 +72,7 @@ where
 #[test]
 fn box_and_ref() {
     let bar = BoxAndRefBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |data| data,
     }
     .build();
@@ -86,7 +86,7 @@ fn box_and_ref() {
 #[tokio::test]
 async fn async_new() {
     let bar = BoxAndRefAsyncBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |data| Box::pin(async move { data }),
     }
     .build()
@@ -101,7 +101,7 @@ async fn async_new() {
 #[tokio::test]
 async fn async_try_new() {
     let bar = BoxAndRefAsyncTryBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |data| Box::pin(async move { Result::<_, ()>::Ok(data) }),
     }
     .try_build()
@@ -117,7 +117,7 @@ async fn async_try_new() {
 #[tokio::test]
 async fn async_try_new_err() {
     let result = BoxAndRefAsyncTryBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |_data| Box::pin(async move { Err(56u64) }),
     }
     .try_build()
@@ -132,7 +132,7 @@ async fn async_try_new_err() {
 #[test]
 fn try_new() {
     let bar = BoxAndRefTryBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |data| Result::<_, ()>::Ok(data),
     }
     .try_build()
@@ -144,7 +144,7 @@ fn try_new() {
 #[test]
 fn try_new_err() {
     let result = BoxAndRefTryBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |_data| Err(56),
     }
     .try_build();
@@ -158,12 +158,12 @@ fn try_new_err() {
 #[test]
 fn try_new_recover_heads() {
     let result = BoxAndRefTryBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |_data| Err(56),
     }
     .try_build_or_recover();
     if let Err((56, heads)) = result {
-        assert!(heads.data == Box::new(12));
+        assert!(heads.data == 12);
     } else {
         panic!("Test failed.");
     }
@@ -172,11 +172,11 @@ fn try_new_recover_heads() {
 #[test]
 fn into_heads() {
     let bar = BoxAndRefBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |data| data,
     }
     .build();
-    assert!(bar.into_heads().data == Box::new(12));
+    assert!(bar.into_heads().data == 12);
 }
 
 #[test]
@@ -196,9 +196,9 @@ fn template_mess() {
     let ext_str = "Hello World!".to_owned();
     let mut instance = TemplateMessBuilder {
         external: &ext_str[..],
-        data1: Box::new("asdf".to_owned()),
+        data1: "asdf".to_owned(),
         data2_builder: |data1_contents| data1_contents,
-        data3: Box::new("asdf".to_owned()),
+        data3: "asdf".to_owned(),
         data4_builder: |data3_contents| data3_contents,
     }
     .build();
@@ -214,7 +214,7 @@ fn template_mess() {
 const STATIC_INT: i32 = 456;
 #[test]
 fn self_reference_with() {
-    let mut bar = BoxAndRef::new(Box::new(123), |b| b);
+    let mut bar = BoxAndRef::new(123, |b| b);
     bar.with_dref(|dref| {
         assert_eq!(**dref, 123);
     });
