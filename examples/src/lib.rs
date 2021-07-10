@@ -4,9 +4,9 @@ use ouroboros::self_referencing;
 mod ok_tests;
 
 #[self_referencing]
-/// A simple struct which contains a `Box<i32>` and a `&'this i32`.
-pub struct BoxAndRef {
-    data: Box<i32>,
+/// A simple struct which contains an `i32` and a `&'this i32`.
+pub struct DataAndRef {
+    data: i32,
     #[borrows(data)]
     data_ref: &'this i32,
 }

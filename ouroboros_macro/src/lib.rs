@@ -72,7 +72,7 @@ impl StructFieldInfo {
 
     // Returns code which takes a variable with the same name and type as this field and turns it
     // into a static reference to its dereffed contents. For example, suppose a field
-    // `test: Box<i32>`. This method would generate code that looks like:
+    // `test: AliasableBox<i32>`. This method would generate code that looks like:
     // ```rust
     // // Variable name taken from self.illegal_ref_name()
     // let test_illegal_static_reference = unsafe {

@@ -67,9 +67,6 @@
 /// # You must comply with these limitations
 /// - Fields must be declared before the first time they are borrowed.
 /// - Normal borrowing rules apply, E.G. a field cannot be borrowed mutably twice.
-/// - Fields that are borrowed must be of a data type that implement
-///   [`StableDeref`](https://docs.rs/stable_deref_trait/1.2.0/stable_deref_trait/trait.StableDeref.html).
-///   Normally this just means `Box<T>`.
 /// - Fields that use the `'this` lifetime must have a corresponding `#[borrows()]` annotation.
 ///   The error for this needs some work, currently you will get an error saying that `'this` is
 ///   undefined at the location it was illegally used in.
@@ -147,19 +144,6 @@
 ///
 /// These annotations control whether or not a `borrow_*` method is generated for that field.
 ///
-/// # Using `chain_hack`
-/// Unfortunately, as of September 2020, Rust has a
-/// [known limitation in its type checker](https://users.rust-lang.org/t/why-does-this-not-compile-box-t-target-t/49027/7?u=aaaaa)
-/// which prevents chained references from working (I.E. structs where field C references field B
-/// which references field A.) To counteract this problem, you can use
-/// `#[self_referencing(chain_hack)]` to allow creating these kinds of structs at the cost of
-/// additional restrictions and possible loss of clarity in some error messages. The main limitation
-/// is that all fields that are borrowed must be of type `Box<T>`. A nice error message will be
-/// generated if you use a different type. There should be no other limitations, but some
-/// configurations may produce strange compiler errors. If you find such a configuration, please
-/// open an issue on the [Github repository](https://github.com/joshua-maros/ouroboros/issues).
-/// You can view a documented example of a struct which uses `chain_hack` [here](https://docs.rs/ouroboros_examples/latest/ouroboros_examples/struct.ChainHack.html).
-///
 /// # Async usage
 /// All self-referencing structs can be initialized asynchronously by using either the
 /// `MyStruct::new_async()` function or the `MyStructAsyncBuilder` builder. Due to limitations of
@@ -172,8 +156,8 @@
 ///
 /// #[self_referencing]
 /// struct MyStruct {
-///     int_data: Box<i32>,
-///     float_data: Box<f32>,
+///     int_data: i32,
+///     float_data: f32,
 ///     #[borrows(int_data)]
 ///     int_reference: &'this i32,
 ///     #[borrows(mut float_data)]
@@ -183,8 +167,8 @@
 /// #[tokio::main]
 /// async fn main() {
 ///     let mut my_value = MyStructAsyncBuilder {
-///         int_data: Box::new(42),
-///         float_data: Box::new(3.14),
+///         int_data: 42,
+///         float_data: 3.14,
 ///         int_reference_builder: |int_data: &i32| Box::pin(async move { int_data }),
 ///         float_reference_builder: |float_data: &mut f32| Box::pin(async move { float_data }),
 ///     }.build().await;

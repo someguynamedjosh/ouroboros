@@ -7,27 +7,20 @@
 Easy self-referential struct generation for Rust. 
 Dual licensed under MIT / Apache 2.0.
 
-Note: Version `0.7.0` removed the `with_*_contents` and `borrow_*_contents` functions, replacing
-them with `with_*` and `borrow_*` functions that work similar to functions with those names in 
-earlier versions. In other words, there is no longer separate semantics for accessing tail fields
-and immutably borrowed fields. See the documentation for a full explanation.
+Note: Version `0.10.0` and later automatically box every field. This is done
+to prevent undefined behavior, but has the side effect of making the library
+easier to work with.
 
-Note: as of September 2020, there is a [limitation in Rust's type checker](https://users.rust-lang.org/t/why-does-this-not-compile-box-t-target-t/49027/7?u=aaaaa)
-which prevents structs with chained references from compiling properly. (E.G. you cannot have a 
-struct where field C refers to field B which refers to field A.) Refer to the documentation on
-[chain_hack](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#using-chain_hack) 
-for a workaround for this problem.
-
-Tests are located in the examples/ folder because they need to be in a crate outside of `ouroboros`
-for the `self_referencing` macro to work properly.
+Tests are located in the examples/ folder because they need to be in a crate
+outside of `ouroboros` for the `self_referencing` macro to work properly.
 
 ```rust
 use ouroboros::self_referencing;
 
 #[self_referencing]
 struct MyStruct {
-    int_data: Box<i32>,
-    float_data: Box<f32>,
+    int_data: i32,
+    float_data: f32,
     #[borrows(int_data)]
     int_reference: &'this i32,
     #[borrows(mut float_data)]
@@ -36,8 +29,8 @@ struct MyStruct {
 
 fn main() {
     let mut my_value = MyStructBuilder {
-        int_data: Box::new(42),
-        float_data: Box::new(3.14),
+        int_data: 42,
+        float_data: 3.14,
         int_reference_builder: |int_data: &i32| int_data,
         float_reference_builder: |float_data: &mut f32| float_data,
     }.build();

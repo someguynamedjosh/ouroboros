@@ -6,7 +6,7 @@ struct NotGuaranteedCovariant<'a> {
 
 #[self_referencing]
 struct Test {
-    data: Box<()>,
+    data: (),
     #[borrows(data)]
     field: NotGuaranteedCovariant<'this>
 }

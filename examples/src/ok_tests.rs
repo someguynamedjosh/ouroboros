@@ -20,34 +20,34 @@ struct BoxAndRef {
 
 #[self_referencing]
 struct BoxAndMutRef {
-    data: Box<i32>,
+    data: i32,
     #[borrows(mut data)]
     dref: &'this mut i32,
 }
 
 #[self_referencing(no_doc)]
 struct ChainedAndUndocumented {
-    data: Box<i32>,
+    data: i32,
     #[borrows(data)]
-    ref1: Box<&'this i32>,
+    ref1: &'this i32,
     #[borrows(data)]
     ref2: &'this &'this i32,
 }
 
 #[self_referencing]
 struct BoxCheckWithLifetimeParameter<'t> {
-    external_data: Box<&'t ()>,
+    external_data: &'t (),
     #[borrows(external_data)]
     #[covariant]
-    self_reference: Box<&'this &'t ()>,
+    self_reference: &'this &'t (),
 }
 
 #[self_referencing]
 struct AutoDetectCovarianceOnFieldsWithoutThis {
-    data: Box<()>,
+    data: (),
     unrelated_data: Box<i32>,
     #[borrows(data)]
-    self_reference: Box<&'this ()>,
+    self_reference: &'this (),
 }
 
 /// This test just makes sure that the macro copes with a ton of template parameters being thrown at
@@ -182,7 +182,7 @@ fn into_heads() {
 #[test]
 fn box_and_mut_ref() {
     let mut bar = BoxAndMutRefBuilder {
-        data: Box::new(12),
+        data: 12,
         dref_builder: |data| data,
     }
     .build();
@@ -285,7 +285,7 @@ mod test_hygiene {
 
     #[ouroboros::self_referencing]
     struct BoxAndRef {
-        data: Box<i32>,
+        data: i32,
         #[borrows(data)]
         dref: &'this i32,
     }
