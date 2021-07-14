@@ -609,7 +609,9 @@ fn create_actual_struct(
     if let Some(clause) = &generics.where_clause {
         where_clause = quote! { #clause };
     }
+    let attributes = original_struct_def.attrs.clone();
     let actual_struct_def = quote! {
+        #(#attributes)*
         #visibility struct #type_name #generics #where_clause {
             #(#actual_fields),*
         }
