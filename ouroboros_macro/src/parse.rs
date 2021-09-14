@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenTree};
 use quote::format_ident;
-use syn::{Attribute, Error, Fields, GenericParam, ItemStruct};
+use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct};
 
 use crate::{
     covariance_detection::type_is_covariant,
@@ -192,8 +192,22 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
     } else {
         format_ident!("static")
     };
-    if def.attrs.len() > 0 {
-        unimplemented!()
+    let mut attributes = Vec::new();
+    for attr in &def.attrs {
+        let p = &attr.path.segments;
+        if p.len() == 0 {
+            return Err(Error::new(p.span(), &format!("Unsupported attribute")));
+        }
+        let name = p[0].ident.to_string();
+        let good = match &name[..] {
+            "clippy" | "allow" | "deny" | "doc" => true,
+            _ => false,
+        };
+        if good {
+            attributes.push(attr.clone())
+        } else {
+            return Err(Error::new(p.span(), &format!("Unsupported attribute")));
+        }
     }
 
     return Ok(StructInfo {
@@ -202,5 +216,6 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
         fields,
         vis,
         first_lifetime,
+        attributes,
     });
 }

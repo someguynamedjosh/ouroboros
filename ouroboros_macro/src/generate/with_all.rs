@@ -53,7 +53,7 @@ pub fn make_with_all_function(
         let mut new_generic_params = info.generic_params().clone();
         new_generic_params.insert(0, syn::parse_quote! { 'this });
         new_generic_params.insert(0, syn::parse_quote! { 'outer_borrow });
-        quote! { #new_generic_params }
+        quote! { <#new_generic_params> }
     };
     let new_generic_args = {
         let mut args = info.generic_arguments();

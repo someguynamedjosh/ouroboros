@@ -1,7 +1,7 @@
 use crate::utils::{make_generic_arguments, make_generic_consumers, replace_this_with_lifetime};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{punctuated::Punctuated, token::Comma, Error, GenericParam, Generics, Type, Visibility};
+use syn::{Attribute, Error, GenericParam, Generics, Type, Visibility, punctuated::Punctuated, token::Comma};
 
 #[derive(Clone, Copy)]
 pub struct Options {
@@ -38,6 +38,7 @@ pub struct StructInfo {
     pub vis: Visibility,
     pub fields: Vec<StructFieldInfo>,
     pub first_lifetime: Ident,
+    pub attributes: Vec<Attribute>,
 }
 
 impl StructInfo {

@@ -1,4 +1,7 @@
-use crate::{info_structures::StructInfo, utils::replace_this_with_lifetime};
+use crate::{
+    info_structures::StructInfo,
+    utils::{self, replace_this_with_lifetime},
+};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Error;
@@ -7,7 +10,7 @@ use syn::Error;
 /// fields, collecting metadata about them, reversing the order everything is stored in, and
 /// converting any uses of 'this to 'static.
 pub fn create_actual_struct_def(info: &StructInfo) -> Result<TokenStream, Error> {
-    let vis = &info.vis;
+    let vis = utils::submodule_contents_visiblity(&info.vis);
     let ident = &info.ident;
     let generics = &info.generics;
 

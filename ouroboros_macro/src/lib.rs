@@ -72,7 +72,7 @@ fn self_referencing_impl(
             #async_try_builder_def
             #with_all_struct_defs
             #heads_struct_def
-            impl #generic_params #struct_name <#(#generic_args),*> #generic_where {
+            impl <#generic_params> #struct_name <#(#generic_args),*> #generic_where {
                 #constructor_def
                 #async_constructor_def
                 #try_constructor_def

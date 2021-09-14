@@ -31,7 +31,11 @@ pub fn create_try_builder_and_constructor(
     }
     let mut current_head_index = 0;
 
-    let builder_struct_name = format_ident!("{}TryBuilder", info.ident);
+    let builder_struct_name = if make_async {
+        format_ident!("{}AsyncTryBuilder", info.ident)
+    } else {
+        format_ident!("{}TryBuilder", info.ident)
+    };
     let documentation = format!(
         concat!(
             "(See also [`{0}::try_build()`]({0}::try_build).) Like [`new`](Self::new), but ",

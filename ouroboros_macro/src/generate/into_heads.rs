@@ -47,7 +47,7 @@ pub fn make_into_heads(info: &StructInfo, options: Options) -> (TokenStream, Tok
     let generic_where = &info.generics.where_clause;
     let heads_struct_def = quote! {
         #[doc=#documentation]
-        #visibility struct Heads #generic_params #generic_where {
+        #visibility struct Heads <#generic_params> #generic_where {
             #(#head_fields),*
         }
     };

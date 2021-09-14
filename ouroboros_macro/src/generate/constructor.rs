@@ -19,7 +19,11 @@ pub fn create_builder_and_constructor(
     } else {
         syn::parse_quote! { pub(super) }
     };
-    let builder_struct_name = format_ident!("{}Builder", info.ident);
+    let builder_struct_name = if make_async {
+        format_ident!("{}AsyncBuilder", info.ident)
+    } else {
+        format_ident!("{}Builder", info.ident)
+    };
     let documentation = format!(
         concat!(
             "Constructs a new instance of this self-referential struct. (See also ",

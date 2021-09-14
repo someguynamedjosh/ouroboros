@@ -2,7 +2,10 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::GenericParam;
 
-use crate::{covariance_detection::apparent_std_container_type, info_structures::StructInfo, utils::replace_this_with_lifetime};
+use crate::{
+    covariance_detection::apparent_std_container_type, info_structures::StructInfo,
+    utils::replace_this_with_lifetime,
+};
 
 pub fn make_type_asserts(info: &StructInfo) -> TokenStream {
     let mut checks = Vec::new();
@@ -31,7 +34,7 @@ pub fn make_type_asserts(info: &StructInfo) -> TokenStream {
     let generic_params = info.generic_params();
     let generic_where = &info.generics.where_clause;
     quote! {
-        fn type_asserts #generic_params() #generic_where {
+        fn type_asserts <#generic_params>() #generic_where {
             #(#checks)*
         }
     }
