@@ -1,10 +1,10 @@
-use proc_macro2::{Span, TokenTree};
-use quote::format_ident;
-use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct};
+use proc_macro2::{Delimiter, Span, TokenTree};
+use quote::{format_ident, quote};
+use syn::{spanned::Spanned, token::Paren, Attribute, Error, Fields, GenericParam, ItemStruct};
 
 use crate::{
     covariance_detection::type_is_covariant,
-    info_structures::{BorrowRequest, FieldType, StructFieldInfo, StructInfo},
+    info_structures::{BorrowRequest, Derive, FieldType, StructFieldInfo, StructInfo},
     utils::submodule_contents_visiblity,
 };
 
@@ -94,6 +94,40 @@ fn handle_borrows_attr(
         }
     }
     Ok(())
+}
+
+fn parse_derive_token(token: &TokenTree) -> Result<Option<Derive>, Error> {
+    match token {
+        TokenTree::Ident(ident) => match &ident.to_string()[..] {
+            "Debug" => Ok(Some(Derive::Debug)),
+            "PartialEq" => Ok(Some(Derive::PartialEq)),
+            "Eq" => Ok(Some(Derive::Eq)),
+            _ => Err(Error::new(
+                ident.span(),
+                format!("{} cannot be derived for self-referencing structs", ident),
+            )),
+        },
+        TokenTree::Punct(..) => Ok(None),
+        _ => Err(Error::new(token.span(), "bad syntax")),
+    }
+}
+
+fn parse_derive_attribute(attr: &Attribute) -> Result<Vec<Derive>, Error> {
+    let body = &attr.tokens;
+    if let Some(TokenTree::Group(body)) = body.clone().into_iter().next() {
+        if body.delimiter() != Delimiter::Parenthesis {
+            panic!("TODO: nice error, bad define syntax")
+        }
+        let mut derives = Vec::new();
+        for token in body.stream().into_iter() {
+            if let Some(derive) = parse_derive_token(&token)? {
+                derives.push(derive);
+            }
+        }
+        Ok(derives)
+    } else {
+        Err(Error::new(attr.span(), "bad syntax"))
+    }
 }
 
 pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
@@ -193,6 +227,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
         format_ident!("static")
     };
     let mut attributes = Vec::new();
+    let mut derives = Vec::new();
     for attr in &def.attrs {
         let p = &attr.path.segments;
         if p.len() == 0 {
@@ -205,12 +240,22 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
         };
         if good {
             attributes.push(attr.clone())
+        } else if name == "derive" {
+            if derives.len() > 0 {
+                return Err(Error::new(
+                    attr.span(),
+                    "Multiple derive attributes not allowed",
+                ));
+            } else {
+                derives = parse_derive_attribute(attr)?;
+            }
         } else {
             return Err(Error::new(p.span(), &format!("Unsupported attribute")));
         }
     }
 
     return Ok(StructInfo {
+        derives,
         ident: def.ident.clone(),
         generics: def.generics.clone(),
         fields,

@@ -6,16 +6,7 @@ mod info_structures;
 mod parse;
 mod utils;
 
-use crate::{
-    generate::{
-        constructor::create_builder_and_constructor, into_heads::make_into_heads,
-        struc::create_actual_struct_def, try_constructor::create_try_builder_and_constructor,
-        type_asserts::make_type_asserts, with_all::make_with_all_function,
-        with_each::make_with_functions,
-    },
-    info_structures::Options,
-    parse::parse_struct,
-};
+use crate::{generate::{constructor::create_builder_and_constructor, derives::create_derives, into_heads::make_into_heads, struc::create_actual_struct_def, try_constructor::create_try_builder_and_constructor, type_asserts::make_type_asserts, with_all::make_with_all_function, with_each::make_with_functions}, info_structures::Options, parse::parse_struct};
 use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -48,6 +39,9 @@ fn self_referencing_impl(
     let with_defs = make_with_functions(&info, options)?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(&info, options)?;
     let (heads_struct_def, into_heads_fn) = make_into_heads(&info, options);
+
+    let impls = create_derives(&info)?;
+
     // These check that types like Box, Arc, and Rc refer to those types in the std lib and have not
     // been overridden.
     let type_asserts_def = make_type_asserts(&info);
@@ -72,6 +66,7 @@ fn self_referencing_impl(
             #async_try_builder_def
             #with_all_struct_defs
             #heads_struct_def
+            #impls
             impl <#generic_params> #struct_name <#(#generic_args),*> #generic_where {
                 #constructor_def
                 #async_constructor_def

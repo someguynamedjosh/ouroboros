@@ -1,7 +1,10 @@
 use crate::utils::{make_generic_arguments, make_generic_consumers, replace_this_with_lifetime};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{Attribute, Error, GenericParam, Generics, Type, Visibility, punctuated::Punctuated, token::Comma};
+use syn::{
+    punctuated::Punctuated, token::Comma, Attribute, Error, GenericParam, Generics, Type,
+    Visibility,
+};
 
 #[derive(Clone, Copy)]
 pub struct Options {
@@ -32,7 +35,15 @@ pub struct BorrowRequest {
 }
 
 #[derive(Clone)]
+pub enum Derive {
+    Debug,
+    PartialEq,
+    Eq,
+}
+
+#[derive(Clone)]
 pub struct StructInfo {
+    pub derives: Vec<Derive>,
     pub ident: Ident,
     pub generics: Generics,
     pub vis: Visibility,
@@ -98,6 +109,10 @@ impl StructFieldInfo {
 
     pub fn is_borrowed(&self) -> bool {
         self.field_type != FieldType::Tail
+    }
+
+    pub fn is_mutably_borrowed(&self) -> bool {
+        self.field_type == FieldType::BorrowedMut
     }
 
     pub fn stored_type(&self) -> TokenStream {
