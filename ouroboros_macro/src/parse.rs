@@ -1,6 +1,6 @@
 use proc_macro2::{Delimiter, Span, TokenTree};
-use quote::{format_ident, quote};
-use syn::{spanned::Spanned, token::Paren, Attribute, Error, Fields, GenericParam, ItemStruct};
+use quote::format_ident;
+use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct};
 
 use crate::{
     covariance_detection::type_is_covariant,
