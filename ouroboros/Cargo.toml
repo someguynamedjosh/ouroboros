@@ -1,6 +1,6 @@
 [package]
 name = "ouroboros"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Joshua Maros <joshua-maros@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -11,5 +11,5 @@ repository = "https://github.com/joshua-maros/ouroboros"
 
 [dependencies]
 aliasable = "0.1.3"
-ouroboros_macro = { version = "0.10.1", path = "../ouroboros_macro" }
+ouroboros_macro = { version = "0.11.0", path = "../ouroboros_macro" }
 stable_deref_trait = "1.2"

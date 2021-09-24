@@ -7,6 +7,10 @@
 Easy self-referential struct generation for Rust. 
 Dual licensed under MIT / Apache 2.0.
 
+Note: Version `0.11.0` and later place restrictions on derive macros, earlier
+versions allowed using them in ways which could lead to undefined behavior if
+not used properly.
+
 Note: Version `0.10.0` and later automatically box every field. This is done
 to prevent undefined behavior, but has the side effect of making the library
 easier to work with.
