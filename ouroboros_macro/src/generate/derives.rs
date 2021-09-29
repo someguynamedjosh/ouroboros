@@ -36,7 +36,7 @@ fn impl_debug(info: &StructInfo) -> Result<TokenStream, Error> {
         .map(|field| {
             let name = &field.name;
             quote! {
-                field(stringify!(#name), &self.#name)
+                field(stringify!(#name), &safe_self.#name)
             }
         })
         .collect::<Vec<_>>();
@@ -44,10 +44,11 @@ fn impl_debug(info: &StructInfo) -> Result<TokenStream, Error> {
     let struct_name = &info.ident;
     let body = quote! {
         fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            f.debug_struct(stringify!(#struct_name))
-            #(.#fields)*
-            .finish()?;
-            Ok(())
+            self.with(|safe_self| {
+                f.debug_struct(stringify!(#struct_name))
+                #(.#fields)*
+                .finish()
+            })
         }
     };
     Ok(impl_trait(info, trait_name, body))
@@ -61,14 +62,18 @@ fn impl_partial_eq(info: &StructInfo) -> Result<TokenStream, Error> {
         .map(|field| {
             let name = &field.name;
             quote! {
-                &*self.#name == &*other.#name
+                &*safe_self.#name == &*safe_other.#name
             }
         })
         .collect::<Vec<_>>();
     let trait_name = syn::parse_quote! { ::core::cmp::PartialEq };
     let body = quote! {
         fn eq(&self, other: &Self) -> bool {
-            #(#fields)&&*
+            self.with(|safe_self| {
+                other.with(|safe_other| {
+                    #(#fields)&&*
+                })
+            })
         }
     };
     Ok(impl_trait(info, trait_name, body))
