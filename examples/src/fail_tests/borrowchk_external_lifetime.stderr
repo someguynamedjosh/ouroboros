@@ -1,0 +1,13 @@
+error[E0597]: `o` does not live long enough
+ --> $DIR/borrowchk_external_lifetime.rs:3:1
+  |
+3 | #[self_referencing]
+  | ^^^^^^^^^^^^^^^^^^-
+  | |                 |
+  | |                 `o` dropped here while still borrowed
+  | borrowed value does not live long enough
+  | argument requires that `o` is borrowed for `'a`
+4 | pub struct S<'a> {
+  |              -- lifetime `'a` defined here
+  |
+  = note: this error originates in the attribute macro `self_referencing` (in Nightly builds, run with -Z macro-backtrace for more info)

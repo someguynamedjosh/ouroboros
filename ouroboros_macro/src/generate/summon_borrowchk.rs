@@ -25,13 +25,17 @@ pub fn generate_borrowchk_summoner(info: &StructInfo) -> Result<TokenStream, Err
             let mut builder_args = Vec::new();
             for (_, borrow) in field.borrows.iter().enumerate() {
                 let borrowed_name = &info.fields[borrow.index].name;
-                builder_args.push(quote! { &#borrowed_name });
+                if borrow.mutable {
+                    builder_args.push(quote! { &mut #borrowed_name });
+                } else {
+                    builder_args.push(quote! { &#borrowed_name });
+                }
             }
             code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
         }
         if field.is_borrowed() {
             let boxed = quote! { ::ouroboros::macro_help::aliasable_boxed(#field_name) };
-            code.push(quote! { let #field_name = #boxed; });
+            code.push(quote! { let mut #field_name = #boxed; });
         };
         if !field.is_mutably_borrowed() {
             value_consumers.push(quote! { #field_name: &#field_name });

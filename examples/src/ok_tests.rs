@@ -54,7 +54,7 @@ struct AutoDetectCovarianceOnFieldsWithoutThis {
 /// it, specifically checking that the templates work fine even when a generated struct doesn't need
 /// all of them. (E.G. heads will only contain 'd, A, and B.)
 #[self_referencing]
-struct TemplateMess<'d, A, B, C>
+struct TemplateMess<'d, A, B: 'static, C: 'static>
 where
     A: ?Sized,
     B: 'static,
