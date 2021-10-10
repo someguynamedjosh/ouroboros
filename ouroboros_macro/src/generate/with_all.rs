@@ -41,26 +41,14 @@ pub fn make_with_all_function(
         }
     }
 
-    let new_generic_params = if info.generic_params().is_empty() {
-        quote! { <'outer_borrow, 'this> }
-    } else {
-        for (ty, ident) in info.generic_consumers() {
-            fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
-            mut_fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
-            field_assignments.push(quote! { #ident: ::core::marker::PhantomData });
-            mut_field_assignments.push(quote! { #ident: ::core::marker::PhantomData });
-        }
-        let mut new_generic_params = info.generic_params().clone();
-        new_generic_params.insert(0, syn::parse_quote! { 'this });
-        new_generic_params.insert(0, syn::parse_quote! { 'outer_borrow });
-        quote! { <#new_generic_params> }
-    };
-    let new_generic_args = {
-        let mut args = info.generic_arguments();
-        args.insert(0, quote! { 'this });
-        args.insert(0, quote! { 'outer_borrow });
-        args
-    };
+    for (ty, ident) in info.generic_consumers() {
+        fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
+        mut_fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
+        field_assignments.push(quote! { #ident: ::core::marker::PhantomData });
+        mut_field_assignments.push(quote! { #ident: ::core::marker::PhantomData });
+    }
+    let new_generic_params = info.borrowed_generic_params();
+    let new_generic_args = info.borrowed_generic_arguments();
 
     let struct_documentation = format!(
         concat!(

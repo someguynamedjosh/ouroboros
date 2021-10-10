@@ -83,9 +83,6 @@ pub fn create_builder_and_constructor(
             // it work.
             let builder_name = field.builder_name();
             params.push(quote! { #builder_name : impl #bound_type });
-            // Ok so hear me out basically without this thing here my IDE thinks the rest of the
-            // code is a string and it all turns green.
-            {}
             doc_table += &format!(
                 "| `{}` | Use a function or closure: `(",
                 builder_name.to_string()

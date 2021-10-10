@@ -63,8 +63,28 @@ impl StructInfo {
         &self.generics.params
     }
 
+    /// Same as generic_params but with 'this and 'outer_borrow prepended.
+    pub fn borrowed_generic_params(&self) -> TokenStream {
+        if self.generic_params().is_empty() {
+            quote! { <'outer_borrow, 'this> }
+        } else {
+            let mut new_generic_params = self.generic_params().clone();
+            new_generic_params.insert(0, syn::parse_quote! { 'this });
+            new_generic_params.insert(0, syn::parse_quote! { 'outer_borrow });
+            quote! { <#new_generic_params> }
+        }
+    }
+
     pub fn generic_arguments(&self) -> Vec<TokenStream> {
         make_generic_arguments(&self.generics)
+    }
+
+    /// Same as generic_arguments but with 'outer_borrow and 'this prepended.
+    pub fn borrowed_generic_arguments(&self) -> Vec<TokenStream> {
+        let mut args = self.generic_arguments();
+        args.insert(0, quote! { 'this });
+        args.insert(0, quote! { 'outer_borrow });
+        args
     }
 
     pub fn generic_consumers(&self) -> impl Iterator<Item = (TokenStream, Ident)> {

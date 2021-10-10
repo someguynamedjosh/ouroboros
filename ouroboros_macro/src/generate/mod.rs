@@ -2,6 +2,7 @@ pub mod constructor;
 pub mod derives;
 pub mod into_heads;
 pub mod struc;
+pub mod summon_borrowchk;
 pub mod try_constructor;
 pub mod type_asserts;
 pub mod with_all;

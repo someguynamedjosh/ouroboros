@@ -6,7 +6,17 @@ mod info_structures;
 mod parse;
 mod utils;
 
-use crate::{generate::{constructor::create_builder_and_constructor, derives::create_derives, into_heads::make_into_heads, struc::create_actual_struct_def, try_constructor::create_try_builder_and_constructor, type_asserts::make_type_asserts, with_all::make_with_all_function, with_each::make_with_functions}, info_structures::Options, parse::parse_struct};
+use crate::{
+    generate::{
+        constructor::create_builder_and_constructor, derives::create_derives,
+        into_heads::make_into_heads, struc::create_actual_struct_def,
+        summon_borrowchk::generate_borrowchk_summoner,
+        try_constructor::create_try_builder_and_constructor, type_asserts::make_type_asserts,
+        with_all::make_with_all_function, with_each::make_with_functions,
+    },
+    info_structures::Options,
+    parse::parse_struct,
+};
 use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -26,6 +36,8 @@ fn self_referencing_impl(
     let info = parse_struct(original_struct_def)?;
 
     let actual_struct_def = create_actual_struct_def(&info)?;
+
+    let borrowchk_summoner = generate_borrowchk_summoner(&info)?;
 
     let (builder_struct_name, builder_def, constructor_def) =
         create_builder_and_constructor(&info, options, false)?;
@@ -60,6 +72,7 @@ fn self_referencing_impl(
         mod #mod_name {
             use super::*;
             #actual_struct_def
+            #borrowchk_summoner
             #builder_def
             #async_builder_def
             #try_builder_def
