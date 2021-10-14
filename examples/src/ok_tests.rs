@@ -22,6 +22,7 @@ struct BoxAndRef {
 struct BoxAndMutRef {
     data: i32,
     #[borrows(mut data)]
+    #[not_covariant]
     dref: &'this mut i32,
 }
 
@@ -66,6 +67,7 @@ where
     data2: &'this C,
     data3: B,
     #[borrows(mut data3)]
+    #[not_covariant]
     data4: &'this mut C,
 }
 

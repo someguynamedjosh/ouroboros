@@ -110,7 +110,9 @@ pub fn type_is_covariant(ty: &syn::Type, in_template: bool) -> bool {
         }
         Ptr(ptr) => type_is_covariant(&ptr.elem, in_template),
         // Ignore the actual lifetime of the reference because Rust can automatically convert those.
-        Reference(rf) => !in_template && type_is_covariant(&rf.elem, in_template),
+        Reference(rf) => {
+            !in_template && rf.mutability.is_none() && type_is_covariant(&rf.elem, in_template)
+        }
         Slice(sl) => type_is_covariant(&sl.elem, in_template),
         TraitObject(..) => false,
         Tuple(tup) => {

@@ -135,32 +135,34 @@ impl StructFieldInfo {
         self.field_type == FieldType::BorrowedMut
     }
 
+    pub fn boxed(&self) -> TokenStream {
+        let name = &self.name;
+        if self.is_mutably_borrowed() {
+            quote! { ::ouroboros::macro_help::aliasable_boxed(#name) }
+        } else {
+            quote! { ::std::boxed::Box::new(#name) }
+        }
+    }
+
     pub fn stored_type(&self) -> TokenStream {
         let t = &self.typ;
-        if self.is_borrowed() {
+        if self.is_mutably_borrowed() {
             quote! { ::ouroboros::macro_help::AliasableBox<#t> }
+        } else if self.is_borrowed() {
+            quote! { ::std::boxed::Box<#t> }
         } else {
             quote! { #t }
         }
     }
 
-    // Returns code which takes a variable with the same name and type as this field and turns it
-    // into a static reference to its dereffed contents. For example, suppose a field
-    // `test: AliasableBox<i32>`. This method would generate code that looks like:
-    // ```rust
-    // // Variable name taken from self.illegal_ref_name()
-    // let test_illegal_static_reference = unsafe {
-    //     ::ouroboros::macro_help::stable_deref_and_change_lifetime(
-    //         &((*result.as_ptr()).field)
-    //     )
-    // };
-    // ```
+    /// Returns code which takes a variable with the same name and type as this field and turns it
+    /// into a static reference to its dereffed contents.
     pub fn make_illegal_static_reference(&self) -> TokenStream {
         let field_name = &self.name;
         let ref_name = self.illegal_ref_name();
         quote! {
             let #ref_name = unsafe {
-                ::ouroboros::macro_help::stable_deref_and_change_lifetime(&#field_name)
+                ::ouroboros::macro_help::change_lifetime(&*#field_name)
             };
         }
     }
@@ -171,7 +173,7 @@ impl StructFieldInfo {
         let ref_name = self.illegal_ref_name();
         quote! {
             let #ref_name = unsafe {
-                ::ouroboros::macro_help::stable_deref_and_change_lifetime_mut(&mut #field_name)
+                ::ouroboros::macro_help::change_lifetime_mut(&mut *#field_name)
             };
         }
     }

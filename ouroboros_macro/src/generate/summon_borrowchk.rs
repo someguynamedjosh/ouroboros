@@ -34,7 +34,7 @@ pub fn generate_borrowchk_summoner(info: &StructInfo) -> Result<TokenStream, Err
             code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
         }
         if field.is_borrowed() {
-            let boxed = quote! { ::ouroboros::macro_help::aliasable_boxed(#field_name) };
+            let boxed = field.boxed();
             code.push(quote! { let mut #field_name = #boxed; });
         };
         if !field.is_mutably_borrowed() {
@@ -45,10 +45,13 @@ pub fn generate_borrowchk_summoner(info: &StructInfo) -> Result<TokenStream, Err
         template_consumers.push(quote! { #ident: ::core::marker::PhantomData });
     }
     let generic_params = info.generic_params();
+    let where_clause = &info.generics.where_clause;
     Ok(quote! {
         fn check_if_okay_according_to_borrow_checker<#generic_params>(
             #(#params,)*
-        ) {
+        )
+        #where_clause
+        {
             #(#code;)*
             BorrowedFields {
                 #(#value_consumers,)*

@@ -27,8 +27,8 @@ pub fn make_with_all_function(
             mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
             let ass = quote! { #field_name: unsafe {
-                ::ouroboros::macro_help::stable_deref_and_change_lifetime(
-                    &self.#field_name
+                ::ouroboros::macro_help::change_lifetime(
+                    &*self.#field_name
                 )
             } };
             fields.push(quote! { #visibility #field_name: &'this #field_type });

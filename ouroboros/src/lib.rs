@@ -304,34 +304,28 @@ pub mod macro_help {
         *AliasableBox::into_unique(boxed)
     }
 
-    /// Converts a reference to an object implementing Deref to a static reference to the data it
-    /// Derefs to. This is obviously unsafe because the compiler can no longer guarantee that the
-    /// data outlives the reference. This function is templated to only work for containers that
-    /// implement StableDeref, E.G. Box and Rc. The intent is that the data that is being pointed
-    /// to will never move as long as the container itself is not dropped. It is up to the consumer
-    /// to get rid of the reference before the container is dropped. The + 'static ensures that
-    /// whatever we are referring to will remain valid indefinitely, that there are no limitations
-    /// on how long the pointer itself can live.
+    /// Converts a reference to an object to a static reference This is
+    /// obviously unsafe because the compiler can no longer guarantee that the
+    /// data outlives the reference.  It is up to the consumer to get rid of the
+    /// reference before the container is dropped. The + 'static ensures that
+    /// whatever we are referring to will remain valid indefinitely, that there
+    /// are no limitations on how long the pointer itself can live.
     ///
     /// # Safety
     ///
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
-    pub unsafe fn stable_deref_and_change_lifetime<'old, 'new: 'old, T: 'new>(
-        data: &'old AliasableBox<T>,
-    ) -> &'new T {
-        &*((&**data) as *const _)
+    pub unsafe fn change_lifetime<'old, 'new: 'old, T: 'new>(data: &'old T) -> &'new T {
+        &*(data as *const _)
     }
 
-    /// Like stable_deref_and_change_lifetime, but for mutable references.
+    /// Like change_lifetime, but for mutable references.
     ///
     /// # Safety
     ///
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
-    pub unsafe fn stable_deref_and_change_lifetime_mut<'old, 'new: 'old, T: 'new>(
-        data: &'old mut AliasableBox<T>,
-    ) -> &'new mut T {
-        &mut *((&mut **data) as *mut _)
+    pub unsafe fn change_lifetime_mut<'old, 'new: 'old, T: 'new>(data: &'old mut T) -> &'new mut T {
+        &mut *(data as *mut _)
     }
 }

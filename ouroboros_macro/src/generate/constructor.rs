@@ -115,7 +115,7 @@ pub fn create_builder_and_constructor(
             builder_struct_field_names.push(quote! { #builder_name });
         }
         if field.is_borrowed() {
-            let boxed = quote! { ::ouroboros::macro_help::aliasable_boxed(#field_name) };
+            let boxed = field.boxed();
             if field.field_type == FieldType::BorrowedMut {
                 code.push(quote! { let mut #field_name = #boxed; });
             } else {

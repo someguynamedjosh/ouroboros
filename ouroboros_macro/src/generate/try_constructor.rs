@@ -107,10 +107,12 @@ pub fn create_try_builder_and_constructor(
                 field_name.to_string()
             );
             if !field.self_referencing {
-                if field.is_borrowed() {
+                if field.is_mutably_borrowed() {
                     head_recover_code[current_head_index] = quote! {
                         #field_name: ::ouroboros::macro_help::unbox(#field_name)
                     };
+                } else if field.is_borrowed() {
+                    head_recover_code[current_head_index] = quote! { #field_name: *#field_name };
                 } else {
                     head_recover_code[current_head_index] = quote! { #field_name };
                 }
@@ -164,7 +166,7 @@ pub fn create_try_builder_and_constructor(
             builder_struct_field_names.push(quote! { #builder_name });
         }
         if field.is_borrowed() {
-            let boxed = quote! { ::ouroboros::macro_help::aliasable_boxed(#field_name) };
+            let boxed = field.boxed();
             if field.field_type == FieldType::BorrowedMut {
                 or_recover_code.push(quote! { let mut #field_name = #boxed; });
             } else {
