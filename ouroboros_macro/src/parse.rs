@@ -3,7 +3,7 @@ use quote::format_ident;
 use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct};
 
 use crate::{
-    covariance_detection::type_is_covariant,
+    covariance_detection::type_is_covariant_over_this_lifetime,
     info_structures::{BorrowRequest, Derive, FieldType, StructFieldInfo, StructInfo},
     utils::submodule_contents_visiblity,
 };
@@ -141,8 +141,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
             for field in &mut def_fields.named {
                 let mut borrows = Vec::new();
                 let mut self_referencing = false;
-                let covariant = type_is_covariant(&field.ty, false);
-                let mut covariant = if covariant { Some(true) } else { None };
+                let mut covariant = type_is_covariant_over_this_lifetime(&field.ty);
                 let mut remove_attrs = Vec::new();
                 for (index, attr) in field.attrs.iter().enumerate() {
                     let path = &attr.path;
@@ -161,10 +160,16 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
                         remove_attrs.push(index);
                     }
                     if path.segments.first().unwrap().ident == "covariant" {
+                        if covariant.is_some() {
+                            panic!("TODO: Nice error, covariance specified twice.");
+                        }
                         covariant = Some(true);
                         remove_attrs.push(index);
                     }
                     if path.segments.first().unwrap().ident == "not_covariant" {
+                        if covariant.is_some() {
+                            panic!("TODO: Nice error, covariance specified twice.");
+                        }
                         covariant = Some(false);
                         remove_attrs.push(index);
                     }
