@@ -137,19 +137,13 @@ impl StructFieldInfo {
 
     pub fn boxed(&self) -> TokenStream {
         let name = &self.name;
-        if self.is_mutably_borrowed() {
-            quote! { ::ouroboros::macro_help::aliasable_boxed(#name) }
-        } else {
-            quote! { ::std::boxed::Box::new(#name) }
-        }
+        quote! { ::ouroboros::macro_help::aliasable_boxed(#name) }
     }
 
     pub fn stored_type(&self) -> TokenStream {
         let t = &self.typ;
-        if self.is_mutably_borrowed() {
+        if self.is_borrowed() {
             quote! { ::ouroboros::macro_help::AliasableBox<#t> }
-        } else if self.is_borrowed() {
-            quote! { ::std::boxed::Box<#t> }
         } else {
             quote! { #t }
         }

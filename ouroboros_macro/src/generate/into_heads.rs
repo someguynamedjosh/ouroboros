@@ -19,11 +19,9 @@ pub fn make_into_heads(info: &StructInfo, options: Options) -> (TokenStream, Tok
         let field_name = &field.name;
         if !field.self_referencing {
             code.push(quote! { let #field_name = self.#field_name; });
-            if field.is_mutably_borrowed() {
+            if field.is_borrowed() {
                 field_initializers
                     .push(quote! { #field_name: ::ouroboros::macro_help::unbox(#field_name) });
-            } else if field.is_borrowed() {
-                field_initializers.push(quote! { #field_name: *#field_name });
             } else {
                 field_initializers.push(quote! { #field_name });
             }

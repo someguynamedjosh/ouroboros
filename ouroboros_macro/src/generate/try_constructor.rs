@@ -107,12 +107,10 @@ pub fn create_try_builder_and_constructor(
                 field_name.to_string()
             );
             if !field.self_referencing {
-                if field.is_mutably_borrowed() {
+                if field.is_borrowed() {
                     head_recover_code[current_head_index] = quote! {
                         #field_name: ::ouroboros::macro_help::unbox(#field_name)
                     };
-                } else if field.is_borrowed() {
-                    head_recover_code[current_head_index] = quote! { #field_name: *#field_name };
                 } else {
                     head_recover_code[current_head_index] = quote! { #field_name };
                 }
