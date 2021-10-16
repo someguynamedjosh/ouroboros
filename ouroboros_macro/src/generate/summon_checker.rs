@@ -4,7 +4,7 @@ use syn::Error;
 
 use crate::info_structures::{ArgType, StructInfo};
 
-pub fn generate_borrowchk_summoner(info: &StructInfo) -> Result<TokenStream, Error> {
+pub fn generate_checker_summoner(info: &StructInfo) -> Result<TokenStream, Error> {
     let mut code: Vec<TokenStream> = Vec::new();
     let mut params: Vec<TokenStream> = Vec::new();
     let mut value_consumers: Vec<TokenStream> = Vec::new();
@@ -33,9 +33,8 @@ pub fn generate_borrowchk_summoner(info: &StructInfo) -> Result<TokenStream, Err
             }
             code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
         }
-        if field.is_borrowed() {
-            let boxed = field.boxed();
-            code.push(quote! { let mut #field_name = #boxed; });
+        if field.is_mutably_borrowed() {
+            code.push(quote! { let mut #field_name = #field_name; });
         };
         if !field.is_mutably_borrowed() {
             value_consumers.push(quote! { #field_name: &#field_name });
@@ -47,7 +46,7 @@ pub fn generate_borrowchk_summoner(info: &StructInfo) -> Result<TokenStream, Err
     let generic_params = info.generic_params();
     let where_clause = &info.generics.where_clause;
     Ok(quote! {
-        fn check_if_okay_according_to_borrow_checker<#generic_params>(
+        fn check_if_okay_according_to_checkers<#generic_params>(
             #(#params,)*
         )
         #where_clause
