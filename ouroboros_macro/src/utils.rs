@@ -4,9 +4,7 @@ use quote::{format_ident, quote};
 use syn::{GenericParam, Generics, Visibility};
 
 /// Makes phantom data definitions so that we don't get unused template parameter errors.
-pub fn make_generic_consumers(
-    generics: &Generics,
-) -> impl Iterator<Item = (TokenStream, Ident)> {
+pub fn make_generic_consumers(generics: &Generics) -> impl Iterator<Item = (TokenStream, Ident)> {
     generics
         .params
         .clone()

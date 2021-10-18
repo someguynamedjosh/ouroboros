@@ -45,6 +45,7 @@ pub fn generate_checker_summoner(info: &StructInfo) -> Result<TokenStream, Error
     }
     let generic_params = info.generic_params();
     let where_clause = &info.generics.where_clause;
+    let borrowed_generic_params_inferred = info.borrowed_generic_params_inferred();
     Ok(quote! {
         fn check_if_okay_according_to_checkers<#generic_params>(
             #(#params,)*
@@ -52,7 +53,7 @@ pub fn generate_checker_summoner(info: &StructInfo) -> Result<TokenStream, Error
         #where_clause
         {
             #(#code;)*
-            BorrowedFields {
+            BorrowedFields::#borrowed_generic_params_inferred {
                 #(#value_consumers,)*
                 #(#template_consumers,)*
             };

@@ -2,8 +2,8 @@ use crate::utils::{make_generic_arguments, make_generic_consumers, replace_this_
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    punctuated::Punctuated, token::Comma, Attribute, Error, GenericParam, Generics, Type,
-    Visibility,
+    punctuated::Punctuated, token::Comma, Attribute, ConstParam, Error, GenericParam, Generics,
+    LifetimeDef, Type, TypeParam, Visibility,
 };
 
 #[derive(Clone, Copy)]
@@ -73,6 +73,18 @@ impl StructInfo {
             new_generic_params.insert(0, syn::parse_quote! { 'outer_borrow });
             quote! { <#new_generic_params> }
         }
+    }
+
+    /// Same as generic_params but without bounds and with '_ prepended twice.
+    pub fn borrowed_generic_params_inferred(&self) -> TokenStream {
+        use GenericParam::*;
+        let params = self.generic_params().iter().map(|p| match p {
+            Type(TypeParam { ident, .. }) | Const(ConstParam { ident, .. }) => {
+                ident.to_token_stream()
+            }
+            Lifetime(LifetimeDef { lifetime, .. }) => lifetime.to_token_stream(),
+        });
+        quote! { <'_, '_, #(#params,)*> }
     }
 
     pub fn generic_arguments(&self) -> Vec<TokenStream> {
