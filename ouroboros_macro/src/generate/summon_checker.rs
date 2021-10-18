@@ -35,8 +35,8 @@ pub fn generate_checker_summoner(info: &StructInfo) -> Result<TokenStream, Error
         }
         if field.is_mutably_borrowed() {
             code.push(quote! { let mut #field_name = #field_name; });
-        };
-        if !field.is_mutably_borrowed() {
+        } else {
+            code.push(quote! { let #field_name = #field_name; });
             value_consumers.push(quote! { #field_name: &#field_name });
         }
     }
