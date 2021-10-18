@@ -51,22 +51,13 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
     match ty {
         Array(arr) => type_is_covariant_over_this_lifetime(&*arr.elem),
         BareFn(f) => {
-            for arg in f.inputs.iter() {
-                if uses_this_lifetime(arg.ty.to_token_stream()) {
-                    return None;
-                }
-            }
-            if let syn::ReturnType::Type(_, ty) = &f.output {
-                if uses_this_lifetime(ty.to_token_stream()) {
-                    return None;
-                }
-            }
-            Some(true)
+            debug_assert!(uses_this_lifetime(f.to_token_stream()));
+            None
         }
         Group(ty) => type_is_covariant_over_this_lifetime(&ty.elem),
         ImplTrait(..) => None, // Unusable in struct definition.
         Infer(..) => None,     // Unusable in struct definition.
-        Macro(..) => None,     // Assume false since we don't know.
+        Macro(..) => None,     // We don't know what the macro will resolve to.
         Never(..) => None,
         Paren(ty) => type_is_covariant_over_this_lifetime(&ty.elem),
         Path(path) => {
@@ -115,11 +106,17 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
             }
             Some(true)
         }
-        Ptr(ptr) => type_is_covariant_over_this_lifetime(&ptr.elem),
+        Ptr(ptr) => {
+            if ptr.mutability.is_some() {
+                Some(false)
+            } else {
+                type_is_covariant_over_this_lifetime(&ptr.elem)
+            }
+        }
         // Ignore the actual lifetime of the reference because Rust can automatically convert those.
         Reference(rf) => {
             if rf.mutability.is_some() {
-                Some(!uses_this_lifetime(rf.elem.clone().into_token_stream()))
+                Some(!uses_this_lifetime(rf.elem.to_token_stream()))
             } else {
                 type_is_covariant_over_this_lifetime(&rf.elem)
             }
@@ -127,15 +124,19 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
         Slice(sl) => type_is_covariant_over_this_lifetime(&sl.elem),
         TraitObject(..) => None,
         Tuple(tup) => {
+            let mut result = Some(true);
             for ty in tup.elems.iter() {
-                if !type_is_covariant_over_this_lifetime(ty)? {
-                    return Some(false)
+                match type_is_covariant_over_this_lifetime(ty) {
+                    Some(true) => (),
+                    Some(false) => return Some(false),
+                    None => result = None,
                 }
             }
-            Some(true)
+            result
         }
-        // As of writing this, syn parses all the types we could need.
-        Verbatim(..) => unimplemented!(),
-        _ => unimplemented!(),
+        // As of writing this, syn parses all the types we could need. However,
+        // just to be safe, return that we don't know if it's covariant.
+        Verbatim(..) => None,
+        _ => None,
     }
 }

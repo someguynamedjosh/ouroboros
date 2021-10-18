@@ -10,7 +10,7 @@ use crate::{
     generate::{
         constructor::create_builder_and_constructor, derives::create_derives,
         into_heads::make_into_heads, struc::create_actual_struct_def,
-        summon_borrowchk::generate_borrowchk_summoner,
+        summon_checker::generate_checker_summoner,
         try_constructor::create_try_builder_and_constructor, type_asserts::make_type_asserts,
         with_all::make_with_all_function, with_each::make_with_functions,
     },
@@ -37,7 +37,7 @@ fn self_referencing_impl(
 
     let actual_struct_def = create_actual_struct_def(&info)?;
 
-    let borrowchk_summoner = generate_borrowchk_summoner(&info)?;
+    let borrowchk_summoner = generate_checker_summoner(&info)?;
 
     let (builder_struct_name, builder_def, constructor_def) =
         create_builder_and_constructor(&info, options, false)?;
