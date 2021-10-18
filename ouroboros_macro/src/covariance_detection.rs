@@ -66,7 +66,7 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
         Group(ty) => type_is_covariant_over_this_lifetime(&ty.elem),
         ImplTrait(..) => None, // Unusable in struct definition.
         Infer(..) => None,     // Unusable in struct definition.
-        Macro(..) => None,     // Assume false since we don't know.
+        Macro(..) => None,     // We don't know what the macro will resolve to.
         Never(..) => None,
         Paren(ty) => type_is_covariant_over_this_lifetime(&ty.elem),
         Path(path) => {
@@ -129,13 +129,14 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
         Tuple(tup) => {
             for ty in tup.elems.iter() {
                 if !type_is_covariant_over_this_lifetime(ty)? {
-                    return Some(false)
+                    return Some(false);
                 }
             }
             Some(true)
         }
-        // As of writing this, syn parses all the types we could need.
-        Verbatim(..) => unimplemented!(),
-        _ => unimplemented!(),
+        // As of writing this, syn parses all the types we could need. However,
+        // just to be safe, return that we don't know if it's covariant.
+        Verbatim(..) => None,
+        _ => None,
     }
 }
