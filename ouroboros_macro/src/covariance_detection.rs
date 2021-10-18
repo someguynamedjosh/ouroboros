@@ -106,7 +106,13 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
             }
             Some(true)
         }
-        Ptr(ptr) => type_is_covariant_over_this_lifetime(&ptr.elem),
+        Ptr(ptr) => {
+            if ptr.mutability.is_some() {
+                Some(false)
+            } else {
+                type_is_covariant_over_this_lifetime(&ptr.elem)
+            }
+        }
         // Ignore the actual lifetime of the reference because Rust can automatically convert those.
         Reference(rf) => {
             if rf.mutability.is_some() {
