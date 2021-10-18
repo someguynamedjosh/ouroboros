@@ -30,7 +30,6 @@ pub struct DocumentationExample {
     #[borrows(int_data)]
     int_reference: &'this i32,
     #[borrows(mut float_data)]
-    #[not_covariant]
     float_reference: &'this mut f32,
 }
 

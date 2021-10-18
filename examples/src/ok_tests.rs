@@ -7,7 +7,6 @@ use std::fmt::Debug;
 struct TraitObject {
     data: Box<dyn Debug>,
     #[borrows(data)]
-    #[covariant]
     dref: &'this dyn Debug,
 }
 
@@ -22,7 +21,6 @@ struct BoxAndRef {
 struct BoxAndMutRef {
     data: i32,
     #[borrows(mut data)]
-    #[not_covariant]
     dref: &'this mut i32,
 }
 
@@ -39,7 +37,6 @@ struct ChainedAndUndocumented {
 struct BoxCheckWithLifetimeParameter<'t> {
     external_data: &'t (),
     #[borrows(external_data)]
-    #[covariant]
     self_reference: &'this &'t (),
 }
 
@@ -67,7 +64,6 @@ where
     data2: &'this C,
     data3: B,
     #[borrows(mut data3)]
-    #[not_covariant]
     data4: &'this mut C,
 }
 
