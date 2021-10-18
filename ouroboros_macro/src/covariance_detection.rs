@@ -124,12 +124,15 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
         Slice(sl) => type_is_covariant_over_this_lifetime(&sl.elem),
         TraitObject(..) => None,
         Tuple(tup) => {
+            let mut result = Some(true);
             for ty in tup.elems.iter() {
-                if !type_is_covariant_over_this_lifetime(ty)? {
-                    return Some(false);
+                match type_is_covariant_over_this_lifetime(ty) {
+                    Some(true) => (),
+                    Some(false) => return Some(false),
+                    None => result = None,
                 }
             }
-            Some(true)
+            result
         }
         // As of writing this, syn parses all the types we could need. However,
         // just to be safe, return that we don't know if it's covariant.
