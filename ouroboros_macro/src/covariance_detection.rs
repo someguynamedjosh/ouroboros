@@ -51,17 +51,8 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
     match ty {
         Array(arr) => type_is_covariant_over_this_lifetime(&*arr.elem),
         BareFn(f) => {
-            for arg in f.inputs.iter() {
-                if uses_this_lifetime(arg.ty.to_token_stream()) {
-                    return None;
-                }
-            }
-            if let syn::ReturnType::Type(_, ty) = &f.output {
-                if uses_this_lifetime(ty.to_token_stream()) {
-                    return None;
-                }
-            }
-            Some(true)
+            debug_assert!(uses_this_lifetime(f.to_token_stream()));
+            None
         }
         Group(ty) => type_is_covariant_over_this_lifetime(&ty.elem),
         ImplTrait(..) => None, // Unusable in struct definition.
