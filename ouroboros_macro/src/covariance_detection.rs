@@ -116,7 +116,7 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
         // Ignore the actual lifetime of the reference because Rust can automatically convert those.
         Reference(rf) => {
             if rf.mutability.is_some() {
-                Some(!uses_this_lifetime(rf.elem.clone().into_token_stream()))
+                Some(!uses_this_lifetime(rf.elem.to_token_stream()))
             } else {
                 type_is_covariant_over_this_lifetime(&rf.elem)
             }
