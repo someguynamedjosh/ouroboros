@@ -1,4 +1,4 @@
-use crate::utils::{make_generic_arguments, make_generic_consumers, replace_this_with_lifetime};
+use crate::utils::{make_const_generic_arguments, make_generic_arguments, make_generic_consumers, replace_this_with_lifetime};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
@@ -89,6 +89,10 @@ impl StructInfo {
 
     pub fn generic_arguments(&self) -> Vec<TokenStream> {
         make_generic_arguments(&self.generics)
+    }
+
+    pub fn const_generic_arguments(&self) -> Vec<TokenStream> {
+        make_const_generic_arguments(&self.generics)
     }
 
     /// Same as generic_arguments but with 'outer_borrow and 'this prepended.

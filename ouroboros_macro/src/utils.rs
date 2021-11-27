@@ -9,26 +9,26 @@ pub fn make_generic_consumers(generics: &Generics) -> impl Iterator<Item = (Toke
         .params
         .clone()
         .into_iter()
-        .map(|param| match param {
+        .filter_map(|param| match param {
             GenericParam::Type(ty) => {
                 let ident = &ty.ident;
-                (
+                Some((
                     quote! { #ident },
                     format_ident!(
                         "_consume_template_type_{}",
                         ident.to_string().to_snake_case()
                     ),
-                )
+                ))
             }
             GenericParam::Lifetime(lt) => {
                 let lifetime = &lt.lifetime;
                 let ident = &lifetime.ident;
-                (
+                Some((
                     quote! { &#lifetime () },
                     format_ident!("_consume_template_lifetime_{}", ident),
-                )
+                ))
             }
-            GenericParam::Const(..) => unimplemented!(),
+            GenericParam::Const(..) => None,
         })
 }
 
@@ -45,7 +45,22 @@ pub fn make_generic_arguments(generics: &Generics) -> Vec<TokenStream> {
                 let lifetime = &lt.lifetime;
                 arguments.push(quote! { #lifetime });
             }
-            GenericParam::Const(_) => unimplemented!("Const generics are not supported yet."),
+            GenericParam::Const(..) => (),
+        }
+    }
+    arguments
+}
+
+pub fn make_const_generic_arguments(generics: &Generics) -> Vec<TokenStream> {
+    let mut arguments = Vec::new();
+    for generic in generics.params.clone() {
+        match generic {
+            GenericParam::Type(typ) => (),
+            GenericParam::Lifetime(lt) => (),
+            GenericParam::Const(con) => {
+                let name = &con.ident;
+                arguments.push(quote! { #name });
+            }
         }
     }
     arguments
