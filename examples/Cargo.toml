@@ -1,6 +1,6 @@
 [package]
 name = "ouroboros_examples"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["Joshua Maros <joshua-maros@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -19,7 +19,7 @@ default = []
 miri = []
 
 [dependencies]
-ouroboros = { version = "0.13.0", path = "../ouroboros" }
+ouroboros = { version = "0.14.0", path = "../ouroboros" }
 stable_deref_trait = "1.2"
 
 [dev-dependencies]
