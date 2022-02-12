@@ -4,7 +4,7 @@ error[E0495]: cannot infer an appropriate lifetime due to conflicting requiremen
 16 |     instance.with_data_ref(|dref| stored_ref = Some(*dref));
    |                                                ^^^^^^^^^^^
    |
-note: first, the lifetime cannot outlive the anonymous lifetime #1 defined on the body at 16:28...
+note: first, the lifetime cannot outlive the anonymous lifetime #1 defined here...
   --> $DIR/move_ref_outside_closure.rs:16:28
    |
 16 |     instance.with_data_ref(|dref| stored_ref = Some(*dref));
