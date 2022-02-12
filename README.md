@@ -28,18 +28,32 @@ struct MyStruct {
     int_data: i32,
     float_data: f32,
     #[borrows(int_data)]
+    // the 'this lifetime is created by the #[self_referencing] macro
+    // and should be used on all references marked by the #[borrows] macro
     int_reference: &'this i32,
     #[borrows(mut float_data)]
     float_reference: &'this mut f32,
 }
 
 fn main() {
+    // The builder is created by the #[self_referencing] macro 
+    // and is used to create the struct
     let mut my_value = MyStructBuilder {
         int_data: 42,
         float_data: 3.14,
+
+        // Note that the name of the field in the builder 
+        // is the name of the field in the struct + `_builder` 
+        // ie: {field_name}_builder
+        // the closure that assigns the value for the field will be passed 
+        // a reference to the field(s) defined in the #[borrows] macro
+	
         int_reference_builder: |int_data: &i32| int_data,
         float_reference_builder: |float_data: &mut f32| float_data,
     }.build();
+
+    // The fields in the original struct can not be accesed directly
+    // The builder creates accessor methods which are called borrow_{field_name}()
 
     // Prints 42
     println!("{:?}", my_value.borrow_int_data());
