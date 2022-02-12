@@ -71,6 +71,7 @@ fn self_referencing_impl(
         #[doc="Encapsulates implementation details for a self-referencing struct. This module is only visible when using --document-private-items."]
         mod #mod_name {
             use super::*;
+            #[doc="The self-referencing struct."]
             #actual_struct_def
             #borrowchk_summoner
             #builder_def
