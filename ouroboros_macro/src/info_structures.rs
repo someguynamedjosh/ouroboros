@@ -245,7 +245,7 @@ impl StructFieldInfo {
         let field_type = &self.typ;
         let return_ty_constructor = || {
             if make_async {
-                quote! { impl ::core::future::Future<Output=#field_type> + 'this }
+                quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=#field_type> + Send + 'this>> }
             } else {
                 quote! { #field_type }
             }
@@ -262,7 +262,7 @@ impl StructFieldInfo {
         let field_type = &self.typ;
         let return_ty_constructor = || {
             if make_async {
-                quote! { impl ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + 'this }
+                quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + Send + 'this>> }
             } else {
                 quote! { ::core::result::Result<#field_type, Error_> }
             }
