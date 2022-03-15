@@ -318,7 +318,7 @@
 /// Similar to the `try_new_async()` function, except that all the **head fields** are returned along side
 /// the original error in case of an error. The preferred way to use this function is through
 /// `MyStructAsyncTryBuilder` and its `try_build_or_recover()` function.
-/// ### `MyStruct::try_new_or_recover_async_Send<E>(fields...) -> Result<MyStruct, (E, Heads)>`
+/// ### `MyStruct::try_new_or_recover_async_send<E>(fields...) -> Result<MyStruct, (E, Heads)>`
 /// Same as `try_new_or_recover_async()` function, but with Send trait specified in the return type.
 /// ### `MyStruct::with_FIELD<R>(&self, user: FnOnce(field: &FieldType) -> R) -> R`
 /// This function is generated for every **tail and immutably-borrowed field** in your struct. It
