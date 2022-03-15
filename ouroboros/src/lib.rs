@@ -22,18 +22,18 @@
 /// }
 ///
 /// fn main() {
-///     // The builder is created by the #[self_referencing] macro 
+///     // The builder is created by the #[self_referencing] macro
 ///     // and is used to create the struct
 ///     let mut my_value = MyStructBuilder {
 ///         int_data: 42,
 ///         float_data: 3.14,
 ///
-///         // Note that the name of the field in the builder 
-///         // is the name of the field in the struct + `_builder` 
+///         // Note that the name of the field in the builder
+///         // is the name of the field in the struct + `_builder`
 ///         // ie: {field_name}_builder
-///         // the closure that assigns the value for the field will be passed 
+///         // the closure that assigns the value for the field will be passed
 ///         // a reference to the field(s) defined in the #[borrows] macro
-///	
+///
 ///         int_reference_builder: |int_data: &i32| int_data,
 ///         float_reference_builder: |float_data: &mut f32| float_data,
 ///     }.build();

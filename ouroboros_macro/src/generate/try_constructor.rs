@@ -1,5 +1,5 @@
 use crate::{
-    info_structures::{ArgType, FieldType, Options, StructInfo},
+    info_structures::{ArgType, BuilderType, FieldType, Options, StructInfo},
     utils::to_class_case,
 };
 use proc_macro2::{Ident, TokenStream};
@@ -9,7 +9,7 @@ use syn::Error;
 pub fn create_try_builder_and_constructor(
     info: &StructInfo,
     options: Options,
-    make_async: bool,
+    builder_type: BuilderType,
 ) -> Result<(Ident, TokenStream, TokenStream), Error> {
     let struct_name = info.ident.clone();
     let generic_args = info.generic_arguments();
@@ -31,10 +31,10 @@ pub fn create_try_builder_and_constructor(
     }
     let mut current_head_index = 0;
 
-    let builder_struct_name = if make_async {
-        format_ident!("{}AsyncTryBuilder", info.ident)
-    } else {
-        format_ident!("{}TryBuilder", info.ident)
+    let builder_struct_name = match builder_type {
+        BuilderType::AsyncSend => format_ident!("{}AsyncSendTryBuilder", info.ident),
+        BuilderType::Async => format_ident!("{}AsyncTryBuilder", info.ident),
+        BuilderType::Sync => format_ident!("{}TryBuilder", info.ident),
     };
     let documentation = format!(
         concat!(
@@ -96,7 +96,7 @@ pub fn create_try_builder_and_constructor(
     for field in &info.fields {
         let field_name = &field.name;
 
-        let arg_type = field.make_try_constructor_arg_type(info, make_async)?;
+        let arg_type = field.make_try_constructor_arg_type(info, builder_type)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -143,7 +143,7 @@ pub fn create_try_builder_and_constructor(
                 }
             }
             doc_table += &format!(") -> Result<{}: _, Error_>` | \n", field_name.to_string());
-            let builder_value = if make_async {
+            let builder_value = if builder_type.is_async() {
                 quote! { #builder_name (#(#builder_args),*).await }
             } else {
                 quote! { #builder_name (#(#builder_args),*) }
@@ -202,22 +202,22 @@ pub fn create_try_builder_and_constructor(
     } else {
         quote! { #[doc(hidden)] }
     };
-    let or_recover_ident = if make_async {
-        quote! { try_new_or_recover_async }
-    } else {
-        quote! { try_new_or_recover }
+    let or_recover_ident = match builder_type {
+        BuilderType::AsyncSend => quote! { try_new_or_recover_async_send },
+        BuilderType::Async => quote! { try_new_or_recover_async },
+        BuilderType::Sync => quote! { try_new_or_recover },
     };
-    let or_recover_constructor_fn = if make_async {
+    let or_recover_constructor_fn = if builder_type.is_async() {
         quote! { async fn #or_recover_ident }
     } else {
         quote! { fn #or_recover_ident }
     };
-    let constructor_fn = if make_async {
-        quote! { async fn try_new_async }
-    } else {
-        quote! { fn try_new }
+    let constructor_fn = match builder_type {
+        BuilderType::AsyncSend => quote! { async fn try_new_async_send },
+        BuilderType::Async => quote! { async fn try_new_async },
+        BuilderType::Sync => quote! { fn try_new },
     };
-    let constructor_code = if make_async {
+    let constructor_code = if builder_type.is_async() {
         quote! { #struct_name::#or_recover_ident(#(#builder_struct_field_names),*).await.map_err(|(error, _heads)| error) }
     } else {
         quote! { #struct_name::#or_recover_ident(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error) }
@@ -237,41 +237,49 @@ pub fn create_try_builder_and_constructor(
     builder_struct_generic_producers.push(quote! { Error_ });
     builder_struct_generic_consumers.push(quote! { Error_ });
     let generic_where = &info.generics.where_clause;
-    let builder_fn = if make_async {
+    let builder_fn = if builder_type.is_async() {
         quote! { async fn try_build }
     } else {
         quote! { fn try_build }
     };
-    let or_recover_builder_fn = if make_async {
+    let or_recover_builder_fn = if builder_type.is_async() {
         quote! { async fn try_build_or_recover }
     } else {
         quote! { fn try_build_or_recover }
     };
-    let builder_code = if make_async {
-        quote! {
+    let builder_code = match builder_type {
+        BuilderType::AsyncSend => quote! {
+            #struct_name::try_new_async_send(
+                #(self.#builder_struct_field_names),*
+            ).await
+        },
+        BuilderType::Async => quote! {
             #struct_name::try_new_async(
                 #(self.#builder_struct_field_names),*
             ).await
-        }
-    } else {
-        quote! {
+        },
+        BuilderType::Sync => quote! {
             #struct_name::try_new(
                 #(self.#builder_struct_field_names),*
             )
-        }
+        },
     };
-    let or_recover_builder_code = if make_async {
-        quote! {
+    let or_recover_builder_code = match builder_type {
+        BuilderType::AsyncSend => quote! {
+            #struct_name::try_new_or_recover_async_send(
+                #(self.#builder_struct_field_names),*
+            ).await
+        },
+        BuilderType::Async => quote! {
             #struct_name::try_new_or_recover_async(
                 #(self.#builder_struct_field_names),*
             ).await
-        }
-    } else {
-        quote! {
+        },
+        BuilderType::Sync => quote! {
             #struct_name::try_new_or_recover(
                 #(self.#builder_struct_field_names),*
             )
-        }
+        },
     };
     let builder_def = quote! {
         #builder_documentation
