@@ -22,18 +22,18 @@
 /// }
 ///
 /// fn main() {
-///     // The builder is created by the #[self_referencing] macro 
+///     // The builder is created by the #[self_referencing] macro
 ///     // and is used to create the struct
 ///     let mut my_value = MyStructBuilder {
 ///         int_data: 42,
 ///         float_data: 3.14,
 ///
-///         // Note that the name of the field in the builder 
-///         // is the name of the field in the struct + `_builder` 
+///         // Note that the name of the field in the builder
+///         // is the name of the field in the struct + `_builder`
 ///         // ie: {field_name}_builder
-///         // the closure that assigns the value for the field will be passed 
+///         // the closure that assigns the value for the field will be passed
 ///         // a reference to the field(s) defined in the #[borrows] macro
-///	
+///
 ///         int_reference_builder: |int_data: &i32| int_data,
 ///         float_reference_builder: |float_data: &mut f32| float_data,
 ///     }.build();
@@ -206,6 +206,52 @@
 /// }
 /// ```
 ///
+/// # Async Send
+/// When Send trait is needed, the Send variant of async methods and builders is available.
+///
+/// Here is the same example as above in its async send version:
+///
+/// ```ignore
+/// use ouroboros::self_referencing;
+///
+/// #[self_referencing]
+/// struct MyStruct {
+///     int_data: i32,
+///     float_data: f32,
+///     #[borrows(int_data)]
+///     int_reference: &'this i32,
+///     #[borrows(mut float_data)]
+///     float_reference: &'this mut f32,
+/// }
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let mut my_value = MyStructAsyncSendBuilder {
+///         int_data: 42,
+///         float_data: 3.14,
+///         int_reference_builder: |int_data: &i32| Box::pin(async move { int_data }),
+///         float_reference_builder: |float_data: &mut f32| Box::pin(async move { float_data }),
+///     }.build().await;
+///
+///     // Prints 42
+///     println!("{:?}", my_value.borrow_int_data());
+///     // Prints 3.14
+///     println!("{:?}", my_value.borrow_float_reference());
+///     // Sets the value of float_data to 84.0
+///     my_value.with_mut(|fields| {
+///         **fields.float_reference = (**fields.int_reference as f32) * 2.0;
+///     });
+///
+///     // We can hold on to this reference...
+///     let int_ref = *my_value.borrow_int_reference();
+///     println!("{:?}", *int_ref);
+///     // As long as the struct is still alive.
+///     drop(my_value);
+///     // This will cause an error!
+///     // println!("{:?}", *int_ref);
+/// }
+/// ```
+///
 /// # What does the macro generate?
 /// The `#[self_referencing]` struct will replace your definition with an unsafe self-referencing
 /// struct with a safe public interface. Many functions will be generated depending on your original
@@ -238,6 +284,9 @@
 /// A basic async constructor. It works identically to the sync constructor differing only in the
 /// type of closures it expects. Whenever a closure is required it is expected to return a Pinned
 /// and Boxed Future that Outputs the same type as the synchronous version.
+/// ### `MyStruct::new_async_send(fields...) -> MyStruct`
+/// An async send constructor. It works identically to the ssync constructor differing only in the
+/// Send trait being specified in the return type.
 /// ### `MyStructBuilder`
 /// This is the preferred way to create a new instance of your struct. It is similar to using the
 /// `MyStruct { a, b, c, d }` syntax instead of `MyStruct::new(a, b, c, d)`. It contains one field
@@ -251,6 +300,8 @@
 /// identically to the synchronous builder differing only in the type of closures it expects.
 /// Whenever a closure is required it is expected to return a Pinned and Boxed Future that Outputs
 /// the same type as the synchronous version.
+/// ### `MyStructAsyncSendBuilder`
+/// Same as MyStructAsyncBuilder, but with Send trait specified in the return type.
 /// ### `MyStruct::try_new<E>(fields...) -> Result<MyStruct, E>`
 /// Similar to the regular `new()` function, except the functions wich create values for all
 /// **self-referencing fields** can return `Result<>`s. If any of those are `Err`s, that error will be
@@ -261,10 +312,14 @@
 /// **self-referencing fields** can return `Result<>`s. If any of those are `Err`s, that error will be
 /// returned instead of an instance of `MyStruct`. The preferred way to use this function is through
 /// `MyStructAsyncTryBuilder` and its `try_build()` function.
+/// ### `MyStruct::try_new_async_send<E>(fields...) -> Result<MyStruct, E>`
+/// Same as `new_async()` function, but with Send trait specified in the return type.
 /// ### `MyStruct::try_new_or_recover_async<E>(fields...) -> Result<MyStruct, (E, Heads)>`
 /// Similar to the `try_new_async()` function, except that all the **head fields** are returned along side
 /// the original error in case of an error. The preferred way to use this function is through
 /// `MyStructAsyncTryBuilder` and its `try_build_or_recover()` function.
+/// ### `MyStruct::try_new_or_recover_async_send<E>(fields...) -> Result<MyStruct, (E, Heads)>`
+/// Same as `try_new_or_recover_async()` function, but with Send trait specified in the return type.
 /// ### `MyStruct::with_FIELD<R>(&self, user: FnOnce(field: &FieldType) -> R) -> R`
 /// This function is generated for every **tail and immutably-borrowed field** in your struct. It
 /// allows safely accessing
