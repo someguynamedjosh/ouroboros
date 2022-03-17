@@ -41,22 +41,6 @@ pub enum Derive {
     Eq,
 }
 
-#[derive(Copy, Clone)]
-pub enum BuilderType {
-    Sync,
-    Async,
-    AsyncSend,
-}
-
-impl BuilderType {
-    pub fn is_async(&self) -> bool {
-        match self {
-            BuilderType::Sync => false,
-            _ => true,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct StructInfo {
     pub derives: Vec<Derive>,
@@ -256,17 +240,15 @@ impl StructFieldInfo {
     pub fn make_constructor_arg_type(
         &self,
         info: &StructInfo,
-        builder_type: BuilderType,
+        make_async: bool,
     ) -> Result<ArgType, Error> {
         let field_type = &self.typ;
-        let return_ty_constructor = || match builder_type {
-            BuilderType::AsyncSend => {
-                quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=#field_type> + ::core::marker::Send + 'this>> }
-            }
-            BuilderType::Async => {
+        let return_ty_constructor = || {
+            if make_async {
                 quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=#field_type> + 'this>> }
+            } else {
+                quote! { #field_type }
             }
-            BuilderType::Sync => quote! { #field_type },
         };
         self.make_constructor_arg_type_impl(info, return_ty_constructor)
     }
@@ -275,17 +257,15 @@ impl StructFieldInfo {
     pub fn make_try_constructor_arg_type(
         &self,
         info: &StructInfo,
-        builder_type: BuilderType,
+        make_async: bool,
     ) -> Result<ArgType, Error> {
         let field_type = &self.typ;
-        let return_ty_constructor = || match builder_type {
-            BuilderType::AsyncSend => {
-                quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + ::core::marker::Send + 'this>> }
-            }
-            BuilderType::Async => {
+        let return_ty_constructor = || {
+            if make_async {
                 quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + 'this>> }
+            } else {
+                quote! { ::core::result::Result<#field_type, Error_> }
             }
-            BuilderType::Sync => quote! { ::core::result::Result<#field_type, Error_> },
         };
         self.make_constructor_arg_type_impl(info, return_ty_constructor)
     }

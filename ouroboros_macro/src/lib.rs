@@ -18,7 +18,6 @@ use crate::{
     parse::parse_struct,
 };
 use inflector::Inflector;
-use info_structures::BuilderType;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2::TokenTree;
@@ -41,17 +40,13 @@ fn self_referencing_impl(
     let borrowchk_summoner = generate_checker_summoner(&info)?;
 
     let (builder_struct_name, builder_def, constructor_def) =
-        create_builder_and_constructor(&info, options, BuilderType::Sync)?;
+        create_builder_and_constructor(&info, options, false)?;
     let (async_builder_struct_name, async_builder_def, async_constructor_def) =
-        create_builder_and_constructor(&info, options, BuilderType::Async)?;
-    let (async_send_builder_struct_name, async_send_builder_def, async_send_constructor_def) =
-        create_builder_and_constructor(&info, options, BuilderType::AsyncSend)?;
+        create_builder_and_constructor(&info, options, true)?;
     let (try_builder_struct_name, try_builder_def, try_constructor_def) =
-        create_try_builder_and_constructor(&info, options, BuilderType::Sync)?;
+        create_try_builder_and_constructor(&info, options, false)?;
     let (async_try_builder_struct_name, async_try_builder_def, async_try_constructor_def) =
-        create_try_builder_and_constructor(&info, options, BuilderType::Async)?;
-    let (async_send_try_builder_struct_name, async_send_try_builder_def, async_send_try_constructor_def) =
-        create_try_builder_and_constructor(&info, options, BuilderType::AsyncSend)?;
+        create_try_builder_and_constructor(&info, options, true)?;
 
     let with_defs = make_with_functions(&info, options)?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(&info, options)?;
@@ -81,20 +76,16 @@ fn self_referencing_impl(
             #borrowchk_summoner
             #builder_def
             #async_builder_def
-            #async_send_builder_def
             #try_builder_def
             #async_try_builder_def
-            #async_send_try_builder_def
             #with_all_struct_defs
             #heads_struct_def
             #impls
             impl <#generic_params> #struct_name <#(#generic_args),*> #generic_where {
                 #constructor_def
                 #async_constructor_def
-                #async_send_constructor_def
                 #try_constructor_def
                 #async_try_constructor_def
-                #async_send_try_constructor_def
                 #(#with_defs)*
                 #with_all_fn_defs
                 #into_heads_fn
@@ -104,10 +95,8 @@ fn self_referencing_impl(
         #visibility use #mod_name :: #struct_name;
         #extra_visibility use #mod_name :: #builder_struct_name;
         #extra_visibility use #mod_name :: #async_builder_struct_name;
-        #extra_visibility use #mod_name :: #async_send_builder_struct_name;
         #extra_visibility use #mod_name :: #try_builder_struct_name;
         #extra_visibility use #mod_name :: #async_try_builder_struct_name;
-        #extra_visibility use #mod_name :: #async_send_try_builder_struct_name;
     }))
 }
 

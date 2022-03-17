@@ -1,5 +1,5 @@
 use crate::{
-    info_structures::{ArgType, BuilderType, FieldType, Options, StructInfo},
+    info_structures::{ArgType, FieldType, Options, StructInfo},
     utils::to_class_case,
 };
 use proc_macro2::{Ident, TokenStream};
@@ -9,7 +9,7 @@ use syn::Error;
 pub fn create_builder_and_constructor(
     info: &StructInfo,
     options: Options,
-    builder_type: BuilderType,
+    make_async: bool,
 ) -> Result<(Ident, TokenStream, TokenStream), Error> {
     let struct_name = info.ident.clone();
     let generic_args = info.generic_arguments();
@@ -19,10 +19,10 @@ pub fn create_builder_and_constructor(
     } else {
         syn::parse_quote! { pub(super) }
     };
-    let builder_struct_name = match builder_type {
-        BuilderType::AsyncSend => format_ident!("{}AsyncSendBuilder", info.ident),
-        BuilderType::Async => format_ident!("{}AsyncBuilder", info.ident),
-        BuilderType::Sync => format_ident!("{}Builder", info.ident),
+    let builder_struct_name = if make_async {
+        format_ident!("{}AsyncBuilder", info.ident)
+    } else {
+        format_ident!("{}Builder", info.ident)
     };
     let documentation = format!(
         concat!(
@@ -67,7 +67,7 @@ pub fn create_builder_and_constructor(
     for field in &info.fields {
         let field_name = &field.name;
 
-        let arg_type = field.make_constructor_arg_type(&info, builder_type)?;
+        let arg_type = field.make_constructor_arg_type(&info, make_async)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -101,7 +101,7 @@ pub fn create_builder_and_constructor(
                 }
             }
             doc_table += &format!(") -> {}: _` | \n", field_name.to_string());
-            if builder_type.is_async() {
+            if make_async {
                 code.push(quote! { let #field_name = #builder_name (#(#builder_args),*).await; });
             } else {
                 code.push(quote! { let #field_name = #builder_name (#(#builder_args),*); });
@@ -148,10 +148,10 @@ pub fn create_builder_and_constructor(
         quote! { #[doc(hidden)] }
     };
 
-    let constructor_fn = match builder_type {
-        BuilderType::AsyncSend => quote! { async fn new_async_send },
-        BuilderType::Async => quote! { async fn new_async },
-        BuilderType::Sync => quote! { fn new },
+    let constructor_fn = if make_async {
+        quote! { async fn new_async }
+    } else {
+        quote! { fn new }
     };
     let field_names: Vec<_> = info.fields.iter().map(|field| field.name.clone()).collect();
     let constructor_def = quote! {
@@ -164,27 +164,23 @@ pub fn create_builder_and_constructor(
         }
     };
     let generic_where = &info.generics.where_clause;
-    let builder_fn = if builder_type.is_async() {
+    let builder_fn = if make_async {
         quote! { async fn build }
     } else {
         quote! { fn build }
     };
-    let builder_code = match builder_type {
-        BuilderType::AsyncSend => quote! {
-            #struct_name::new_async_send(
-                #(self.#builder_struct_field_names),*
-            ).await
-        },
-        BuilderType::Async => quote! {
+    let builder_code = if make_async {
+        quote! {
             #struct_name::new_async(
                 #(self.#builder_struct_field_names),*
             ).await
-        },
-        BuilderType::Sync => quote! {
+        }
+    } else {
+        quote! {
             #struct_name::new(
                 #(self.#builder_struct_field_names),*
             )
-        },
+        }
     };
     let builder_def = quote! {
         #builder_documentation

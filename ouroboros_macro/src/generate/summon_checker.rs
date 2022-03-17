@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Error;
 
-use crate::info_structures::{ArgType, BuilderType, StructInfo};
+use crate::info_structures::{ArgType, StructInfo};
 
 pub fn generate_checker_summoner(info: &StructInfo) -> Result<TokenStream, Error> {
     let mut code: Vec<TokenStream> = Vec::new();
@@ -12,7 +12,7 @@ pub fn generate_checker_summoner(info: &StructInfo) -> Result<TokenStream, Error
     for field in &info.fields {
         let field_name = &field.name;
 
-        let arg_type = field.make_constructor_arg_type(&info, BuilderType::Sync)?;
+        let arg_type = field.make_constructor_arg_type(&info, false)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
