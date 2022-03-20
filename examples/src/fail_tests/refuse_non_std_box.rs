@@ -16,8 +16,6 @@ impl<T> Deref for Box<T> {
     }
 }
 
-unsafe impl<T> stable_deref_trait::StableDeref for Box<T> {}
-
 #[self_referencing]
 struct Simple {
     data: Box<String>,

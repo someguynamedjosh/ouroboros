@@ -20,7 +20,6 @@ miri = []
 
 [dependencies]
 ouroboros = { version = "0.15.0", path = "../ouroboros" }
-stable_deref_trait = "1.2"
 
 [dev-dependencies]
 trybuild = "1.0"
