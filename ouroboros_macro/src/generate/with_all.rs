@@ -110,6 +110,7 @@ pub fn make_with_all_function(
     };
     let fn_defs = quote! {
         #documentation
+        #[inline(always)]
         #visibility fn with <'outer_borrow, ReturnType>(
             &'outer_borrow self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_fields_type) -> ReturnType
@@ -119,6 +120,7 @@ pub fn make_with_all_function(
             })
         }
         #mut_documentation
+        #[inline(always)]
         #visibility fn with_mut <'outer_borrow, ReturnType>(
             &'outer_borrow mut self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_mut_fields_type) -> ReturnType

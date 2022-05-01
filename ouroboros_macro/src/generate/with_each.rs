@@ -29,6 +29,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
             };
             users.push(quote! {
                 #documentation
+                #[inline(always)]
                 #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
@@ -40,6 +41,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                 let borrower_name = format_ident!("borrow_{}", &field.name);
                 users.push(quote! {
                     #documentation
+                    #[inline(always)]
                     #visibility fn #borrower_name<'this>(
                         &'this self,
                     ) -> &'this #field_type {
@@ -69,6 +71,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
             };
             users.push(quote! {
                 #documentation
+                #[inline(always)]
                 #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow mut self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
@@ -94,6 +97,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
             };
             users.push(quote! {
                 #documentation
+                #[inline(always)]
                 #visibility fn #user_name <'outer_borrow, ReturnType>(
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
@@ -112,6 +116,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
             let borrower_name = format_ident!("borrow_{}", &field.name);
             users.push(quote! {
                 #documentation
+                #[inline(always)]
                 #visibility fn #borrower_name<'this>(
                     &'this self,
                 ) -> &'this #field_type {
