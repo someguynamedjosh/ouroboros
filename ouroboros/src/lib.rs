@@ -3,6 +3,7 @@
 //! See the documentation of [`ouroboros_examples`](https://docs.rs/ouroboros_examples) for
 //! sample documentation of structs which have had the macro applied to them.
 
+#![no_std]
 #![allow(clippy::needless_doctest_main)]
 
 /// This macro is used to turn a regular struct into a self-referencing one. An example:
@@ -348,10 +349,12 @@ pub use ouroboros_macro::self_referencing;
 
 #[doc(hidden)]
 pub mod macro_help {
+    pub extern crate alloc;
+
     pub use aliasable::boxed::AliasableBox;
     use aliasable::boxed::UniqueBox;
 
-    pub struct CheckIfTypeIsStd<T>(std::marker::PhantomData<T>);
+    pub struct CheckIfTypeIsStd<T>(core::marker::PhantomData<T>);
 
     macro_rules! std_type_check {
         ($fn_name:ident $T:ident $check_for:ty) => {
@@ -361,9 +364,10 @@ pub mod macro_help {
         };
     }
 
-    std_type_check!(is_std_box_type T std::boxed::Box<T>);
-    std_type_check!(is_std_arc_type T std::sync::Arc<T>);
-    std_type_check!(is_std_rc_type T std::rc::Rc<T>);
+    std_type_check!(is_std_box_type T alloc::boxed::Box<T>);
+    #[cfg(target_has_atomic = "ptr")] // alloc::sync is missing if this is false
+    std_type_check!(is_std_arc_type T alloc::sync::Arc<T>);
+    std_type_check!(is_std_rc_type T alloc::rc::Rc<T>);
 
     pub fn aliasable_boxed<T>(data: T) -> AliasableBox<T> {
         AliasableBox::from_unique(UniqueBox::new(data))
