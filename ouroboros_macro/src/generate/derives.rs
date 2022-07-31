@@ -40,10 +40,10 @@ fn impl_debug(info: &StructInfo) -> Result<TokenStream, Error> {
             }
         })
         .collect::<Vec<_>>();
-    let trait_name = syn::parse_quote! { ::std::fmt::Debug };
+    let trait_name = syn::parse_quote! { ::core::fmt::Debug };
     let struct_name = &info.ident;
     let body = quote! {
-        fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
             self.with(|safe_self| {
                 f.debug_struct(stringify!(#struct_name))
                 #(.#fields)*

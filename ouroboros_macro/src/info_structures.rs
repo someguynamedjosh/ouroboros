@@ -261,10 +261,14 @@ impl StructFieldInfo {
         let field_type = &self.typ;
         let return_ty_constructor = || match builder_type {
             BuilderType::AsyncSend => {
-                quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=#field_type> + ::core::marker::Send + 'this>> }
+                quote! {
+                    ::core::pin::Pin<::ouroboros::macro_help::alloc::boxed::Box<
+                        dyn ::core::future::Future<Output=#field_type> + ::core::marker::Send + 'this>>
+                }
             }
             BuilderType::Async => {
-                quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=#field_type> + 'this>> }
+                quote! { ::core::pin::Pin<::ouroboros::macro_help::alloc::boxed::Box<
+                dyn ::core::future::Future<Output=#field_type> + 'this>> }
             }
             BuilderType::Sync => quote! { #field_type },
         };
@@ -280,10 +284,18 @@ impl StructFieldInfo {
         let field_type = &self.typ;
         let return_ty_constructor = || match builder_type {
             BuilderType::AsyncSend => {
-                quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + ::core::marker::Send + 'this>> }
+                quote! {
+                    ::core::pin::Pin<::ouroboros::macro_help::alloc::boxed::Box<
+                        dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>>
+                            + ::core::marker::Send + 'this>>
+                }
             }
             BuilderType::Async => {
-                quote! { ::std::pin::Pin<::std::boxed::Box<dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>> + 'this>> }
+                quote! {
+                    ::core::pin::Pin<::ouroboros::macro_help::alloc::boxed::Box<
+                        dyn ::core::future::Future<Output=::core::result::Result<#field_type, Error_>>
+                            + 'this>>
+                }
             }
             BuilderType::Sync => quote! { ::core::result::Result<#field_type, Error_> },
         };

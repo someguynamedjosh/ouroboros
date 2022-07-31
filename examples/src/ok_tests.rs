@@ -1,5 +1,8 @@
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use core::fmt::Debug;
+
 use ouroboros::self_referencing;
-use std::fmt::Debug;
 
 // All tests here should compile and run correctly and pass Miri's safety checks.
 
@@ -208,8 +211,8 @@ fn template_mess() {
         data4_builder: |data3_contents| data3_contents,
     }
     .build();
-    instance.with_external(|ext| println!("{}", ext));
-    instance.with_data1(|data| println!("{}", *data));
+    instance.with_external(|ext| assert_eq!(*ext, "Hello World!"));
+    instance.with_data1(|data| assert_eq!(data, "asdf"));
     instance.with_data4_mut(|con| **con = "Modified".to_owned());
     instance.with(|fields| {
         assert!(**fields.data1 == **fields.data2);
