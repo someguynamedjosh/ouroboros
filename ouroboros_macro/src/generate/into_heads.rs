@@ -69,6 +69,7 @@ pub fn make_into_heads(info: &StructInfo, options: Options) -> (TokenStream, Tok
         #documentation
         #[allow(clippy::drop_ref)]
         #[allow(clippy::drop_copy)]
+        #[allow(clippy::drop_non_drop)]
         #visibility fn into_heads(self) -> Heads<#(#generic_args),*> {
             #(#code)*
             Heads {

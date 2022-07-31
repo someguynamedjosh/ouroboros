@@ -9,13 +9,7 @@ error: Ouroboros cannot automatically determine if this type is covariant.
    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0601]: `main` function not found in crate `$CRATE`
-  --> $DIR/auto_covariant.rs:1:1
+  --> $DIR/auto_covariant.rs:12:2
    |
-1  | / use ouroboros::self_referencing;
-2  | |
-3  | | struct NotGuaranteedCovariant<'a> {
-4  | |     data: &'a (),
-...  |
-11 | |     field: NotGuaranteedCovariant<'this>
-12 | | }
-   | |_^ consider adding a `main` function to `$DIR/src/fail_tests/auto_covariant.rs`
+12 | }
+   |  ^ consider adding a `main` function to `$DIR/src/fail_tests/auto_covariant.rs`
