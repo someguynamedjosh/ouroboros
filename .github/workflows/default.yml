@@ -22,9 +22,6 @@ jobs:
       run: cargo test --verbose
     - name: Check under no_std
       run: |
-        # thumbv6m-none-eabi is a Tier 2 target which has no `std` and no atomic pointers.
-        rustup target add thumbv6m-none-eabi
-        cargo check --verbose --target thumbv6m-none-eabi
         # aarch64-unknown-none is Tier 2, has no `std`, but does have atomic pointers.
         rustup target add aarch64-unknown-none
         cargo check --verbose --target aarch64-unknown-none
