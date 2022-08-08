@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Set Rust version
-      run: rustup default 1.40.0
+      run: rustup default 1.48.0
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -28,15 +28,15 @@ jobs:
     - name: Set Rust version
       run: rustup default 1.60.0
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose --no-default-features
     - name: Check under no_std
       run: |
         # thumbv6m-none-eabi is a Tier 2 target which has no `std` and no atomic pointers.
         rustup target add thumbv6m-none-eabi
-        cargo check --verbose --target thumbv6m-none-eabi
+        cargo check --verbose --target thumbv6m-none-eabi --no-default-features
         # aarch64-unknown-none is Tier 2, has no `std`, but does have atomic pointers.
         rustup target add aarch64-unknown-none
-        cargo check --verbose --target aarch64-unknown-none
+        cargo check --verbose --target aarch64-unknown-none --no-default-features
     
   miri-test:
     runs-on: ubuntu-latest
