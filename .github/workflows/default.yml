@@ -11,9 +11,7 @@ env:
 
 jobs:
   stable-test:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
     - name: Set Rust version
@@ -24,6 +22,8 @@ jobs:
       run: cargo test --verbose
 
   no-std-test:
+    runs-on: ubuntu-latest
+    steps:
     - uses: actions/checkout@v2
     - name: Set Rust version
       run: rustup default 1.60.0
