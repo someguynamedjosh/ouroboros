@@ -4,6 +4,4 @@ error[E0599]: no function or associated item named `is_std_box_type` found for s
 19 | #[self_referencing]
    | ^^^^^^^^^^^^^^^^^^^ function or associated item not found in `CheckIfTypeIsStd<Box<String>>`
    |
-   = note: the function or associated item was found for
-           - `CheckIfTypeIsStd<std::boxed::Box<T>>`
-   = note: this error originates in the attribute macro `self_referencing` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)

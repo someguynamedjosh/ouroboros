@@ -8,4 +8,4 @@ error[E0597]: `bar` does not live long enough
   | |                 borrow might be used here, when `bar` is dropped and runs the `Drop` code for type `Bar`
   | borrowed value does not live long enough
   |
-  = note: this error originates in the attribute macro `self_referencing` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
