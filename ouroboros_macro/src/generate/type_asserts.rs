@@ -19,6 +19,7 @@ pub fn make_type_asserts(info: &StructInfo) -> TokenStream {
         if let Some((std_type, _eltype)) = apparent_std_container_type(field_type) {
             let checker_name = match std_type {
                 "Box" => "is_std_box_type",
+                #[cfg(feature = "std")]
                 "Arc" => "is_std_arc_type",
                 "Rc" => "is_std_rc_type",
                 _ => unreachable!(),

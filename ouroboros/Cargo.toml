@@ -12,3 +12,7 @@ repository = "https://github.com/joshua-maros/ouroboros"
 [dependencies]
 aliasable = "0.1.3"
 ouroboros_macro = { version = "0.15.1", path = "../ouroboros_macro" }
+
+[features]
+default = ["std"]
+std = ["ouroboros_macro/std"]
