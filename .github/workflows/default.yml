@@ -16,10 +16,19 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Set Rust version
+      run: rustup default 1.40.0
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  no-std-test:
+    - uses: actions/checkout@v2
+    - name: Set Rust version
+      run: rustup default 1.60.0
+    - name: Build
+      run: cargo build --verbose
     - name: Check under no_std
       run: |
         # thumbv6m-none-eabi is a Tier 2 target which has no `std` and no atomic pointers.
