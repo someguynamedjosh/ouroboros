@@ -3,10 +3,7 @@ use syn::{GenericArgument, PathArguments, Type};
 
 use crate::utils::uses_this_lifetime;
 
-#[cfg(feature = "std")]
 const STD_CONTAINER_TYPES: &[&str] = &["Box", "Arc", "Rc"];
-#[cfg(not(feature = "std"))]
-const STD_CONTAINER_TYPES: &[&str] = &["Box", "Rc"];
 
 /// Returns Some((type_name, element_type)) if the provided type appears to be Box, Arc, or Rc from
 /// the standard library. Returns None if not.
