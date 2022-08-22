@@ -91,7 +91,7 @@ fn box_and_ref() {
 
 // Miri crashes with Pin<Box<Future>> types due to
 // https://github.com/rust-lang/miri/issues/1038
-#[cfg(not(feature = "miri"))]
+#[cfg(all(not(feature = "miri"), feature = "tokio"))]
 #[tokio::test]
 async fn async_new() {
     let bar = BoxAndRefAsyncBuilder {
@@ -106,7 +106,7 @@ async fn async_new() {
 
 // Miri crashes with Pin<Box<Future>> types due to
 // https://github.com/rust-lang/miri/issues/1038
-#[cfg(not(feature = "miri"))]
+#[cfg(all(not(feature = "miri"), feature = "tokio"))]
 #[tokio::test]
 async fn async_try_new() {
     let bar = BoxAndRefAsyncTryBuilder {
@@ -122,7 +122,7 @@ async fn async_try_new() {
 
 // Miri crashes with Pin<Box<Future>> types due to
 // https://github.com/rust-lang/miri/issues/1038
-#[cfg(not(feature = "miri"))]
+#[cfg(all(not(feature = "miri"), feature = "tokio"))]
 #[tokio::test]
 async fn async_try_new_err() {
     let result = BoxAndRefAsyncTryBuilder {
@@ -259,6 +259,7 @@ fn double_lifetime() {
 }
 
 #[cfg(not(feature = "miri"))]
+#[rustversion::stable(1.62)]
 mod compile_tests {
     /// Tests that all files in fail_tests fail to compile.
     #[test]

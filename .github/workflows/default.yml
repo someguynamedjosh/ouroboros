@@ -10,23 +10,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  stable-test:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        RUST: ["1.48", stable, beta, nightly]
     steps:
-    - uses: actions/checkout@v2
-    - name: Set Rust version
-      run: rustup default 1.48.0
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v2
+      - name: Set Rust version
+        run: rustup default ${{ matrix.RUST }}
+      - name: Build
+        run: cargo build --verbose ${{ matrix.RUST != '1.48' && '--features=__tokio' || '' }}
+      - name: Run tests
+        run: cargo test --verbose ${{ matrix.RUST != '1.48' && '--features=__tokio' || '' }}
 
   no-std-test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Set Rust version
-      run: rustup default 1.60.0
     - name: Build
       run: cargo build --verbose --no-default-features
     - name: Check under no_std
