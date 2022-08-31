@@ -286,7 +286,7 @@
 /// type of closures it expects. Whenever a closure is required it is expected to return a Pinned
 /// and Boxed Future that Outputs the same type as the synchronous version.
 /// ### `MyStruct::new_async_send(fields...) -> MyStruct`
-/// An async send constructor. It works identically to the ssync constructor differing only in the
+/// An async send constructor. It works identically to the sync constructor differing only in the
 /// Send trait being specified in the return type.
 /// ### `MyStructBuilder`
 /// This is the preferred way to create a new instance of your struct. It is similar to using the
@@ -295,10 +295,12 @@
 /// originally defined them with. **self-referencing fields** are suffixed with `_builder` since you need
 /// to provide a function instead of a value. Fields with an empty borrows annotation are not
 /// initialized using builders. Calling `.build()` on an instance of `MyStructBuilder`
-/// will convert it to an instance of `MyStruct`.
+/// will convert it to an instance of `MyStruct` by calling all `_builder` functions in the order that
+/// they were declared and storing their results.
 /// ### `MyStructAsyncBuilder`
 /// This is the preferred way to asynchronously create a new instance of your struct. It works
-/// identically to the synchronous builder differing only in the type of closures it expects.
+/// identically to the synchronous builder differing only in the type of closures it expects. In
+/// particular, all builder functions are called serially in the order that they were declared.
 /// Whenever a closure is required it is expected to return a Pinned and Boxed Future that Outputs
 /// the same type as the synchronous version.
 /// ### `MyStructAsyncSendBuilder`
