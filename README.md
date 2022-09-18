@@ -7,6 +7,8 @@
 Easy self-referential struct generation for Rust. 
 Dual licensed under MIT / Apache 2.0.
 
+While this crate is `no_std` compatible, it still requires the `alloc` crate.
+
 Version notes:
 - Version `0.13.0` and later contain checks for additional situations which
   cause undefined behavior if not caught.
