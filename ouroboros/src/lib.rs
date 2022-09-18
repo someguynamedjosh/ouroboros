@@ -158,6 +158,8 @@
 /// uses a covariant type. Adding `#[covariant]` or `#[not_covariant]` will resolve this issue.
 ///
 /// These annotations control whether or not a `borrow_*` method is generated for that field.
+/// Incorrectly using one of these tags will result in a compilation error. It is impossible to
+/// use them unsoundly.
 ///
 /// # Async usage
 /// All self-referencing structs can be initialized asynchronously by using either the
