@@ -205,11 +205,12 @@ impl StructFieldInfo {
     pub fn covariance_error(&self) {
         let error = concat!(
             "Ouroboros cannot automatically determine if this type is covariant.\n\n",
-            "If it is covariant, it should be legal to convert any instance of that type to an ",
-            "instance of that type where all usages of 'this are replaced with a smaller ",
-            "lifetime. For example, Box<&'this i32> is covariant because it is legal to use it as ",
-            "a Box<&'a i32> where 'this: 'a. In contrast, Fn(&'this i32) cannot be used as ",
-            "Fn(&'a i32).\n\n",
+            "As an example, a Box<&'this ()> is covariant because it can be used as a\n",
+            "Box<&'smaller ()> for any lifetime smaller than 'this. In contrast,\n",
+            "a Fn(&'this ()) is not covariant because it cannot be used as a\n",
+            "Fn(&'smaller ()). In general, values that are safe to use with smaller\n",
+            "lifetimes than they were defined with are covariant, breaking this \n",
+            "guarantee means the value is not covariant.\n\n",
             "To resolve this error, add #[covariant] or #[not_covariant] to the field.\n",
         );
         proc_macro_error::emit_error!(self.typ, error);
