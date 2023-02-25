@@ -141,11 +141,6 @@
 /// }
 /// ```
 ///
-/// # Note on memory leaks
-/// Currently, if a builder panics when creating a field, all previous fields will be leaked. This
-/// does not cause any undefined behavior. This behavior may be resolved in the future so that all
-/// previous fields are dropped when a builder panics.
-///
 /// # Covariance
 /// Many types in Rust have a property called "covariance". In practical tearms, this means that a
 /// covariant type like `Box<&'this i32>` can be used as a `Box<&'a i32>` as long as `'a` is
