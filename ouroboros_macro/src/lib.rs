@@ -50,8 +50,11 @@ fn self_referencing_impl(
         create_try_builder_and_constructor(&info, options, BuilderType::Sync)?;
     let (async_try_builder_struct_name, async_try_builder_def, async_try_constructor_def) =
         create_try_builder_and_constructor(&info, options, BuilderType::Async)?;
-    let (async_send_try_builder_struct_name, async_send_try_builder_def, async_send_try_constructor_def) =
-        create_try_builder_and_constructor(&info, options, BuilderType::AsyncSend)?;
+    let (
+        async_send_try_builder_struct_name,
+        async_send_try_builder_def,
+        async_send_try_constructor_def,
+    ) = create_try_builder_and_constructor(&info, options, BuilderType::AsyncSend)?;
 
     let with_defs = make_with_functions(&info, options)?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(&info, options)?;

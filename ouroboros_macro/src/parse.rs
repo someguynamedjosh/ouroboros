@@ -1,6 +1,6 @@
 use proc_macro2::{Delimiter, Span, TokenTree};
 use quote::format_ident;
-use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct};
+use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct, Meta};
 
 use crate::{
     covariance_detection::type_is_covariant_over_this_lifetime,
@@ -15,12 +15,14 @@ fn handle_borrows_attr(
 ) -> Result<(), Error> {
     let mut borrow_mut = false;
     let mut waiting_for_comma = false;
-    let tokens = attr.tokens.clone();
-    let possible_error = Error::new_spanned(&tokens, "Invalid syntax for borrows() macro.");
-    let tokens = if let Some(TokenTree::Group(group)) = tokens.into_iter().next() {
-        group.stream()
-    } else {
-        return Err(possible_error);
+    let tokens = match &attr.meta {
+        Meta::List(ml) => ml.tokens.clone(),
+        _ => {
+            return Err(Error::new_spanned(
+                &attr.meta,
+                "Invalid syntax for borrows() macro.",
+            ))
+        }
     };
     for token in tokens {
         if let TokenTree::Ident(ident) = token {
@@ -113,7 +115,10 @@ fn parse_derive_token(token: &TokenTree) -> Result<Option<Derive>, Error> {
 }
 
 fn parse_derive_attribute(attr: &Attribute) -> Result<Vec<Derive>, Error> {
-    let body = &attr.tokens;
+    let body = match &attr.meta {
+        Meta::List(ml) => &ml.tokens,
+        _ => unreachable!(),
+    };
     if let Some(TokenTree::Group(body)) = body.clone().into_iter().next() {
         if body.delimiter() != Delimiter::Parenthesis {
             panic!("TODO: nice error, bad define syntax")
@@ -144,7 +149,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
                 let mut covariant = type_is_covariant_over_this_lifetime(&field.ty);
                 let mut remove_attrs = Vec::new();
                 for (index, attr) in field.attrs.iter().enumerate() {
-                    let path = &attr.path;
+                    let path = &attr.path();
                     if path.leading_colon.is_some() {
                         continue;
                     }
@@ -234,7 +239,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
     let mut attributes = Vec::new();
     let mut derives = Vec::new();
     for attr in &def.attrs {
-        let p = &attr.path.segments;
+        let p = &attr.path().segments;
         if p.len() == 0 {
             return Err(Error::new(p.span(), &format!("Unsupported attribute")));
         }

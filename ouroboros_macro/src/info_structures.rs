@@ -3,7 +3,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     punctuated::Punctuated, token::Comma, Attribute, ConstParam, Error, GenericParam, Generics,
-    LifetimeDef, Type, TypeParam, Visibility,
+    LifetimeParam, Type, TypeParam, Visibility,
 };
 
 #[derive(Clone, Copy)]
@@ -98,7 +98,7 @@ impl StructInfo {
             Type(TypeParam { ident, .. }) | Const(ConstParam { ident, .. }) => {
                 ident.to_token_stream()
             }
-            Lifetime(LifetimeDef { lifetime, .. }) => lifetime.to_token_stream(),
+            Lifetime(LifetimeParam { lifetime, .. }) => lifetime.to_token_stream(),
         });
         quote! { <'_, '_, #(#params,)*> }
     }

@@ -91,7 +91,7 @@ fn box_and_ref() {
 
 // Miri crashes with Pin<Box<Future>> types due to
 // https://github.com/rust-lang/miri/issues/1038
-#[cfg(all(not(feature = "miri"), feature = "tokio"))]
+#[cfg(all(not(feature = "miri"), feature = "std"))]
 #[tokio::test]
 async fn async_new() {
     use std::future::Future;
@@ -107,7 +107,7 @@ async fn async_new() {
 
 // Miri crashes with Pin<Box<Future>> types due to
 // https://github.com/rust-lang/miri/issues/1038
-#[cfg(all(not(feature = "miri"), feature = "tokio"))]
+#[cfg(all(not(feature = "miri"), feature = "std"))]
 #[tokio::test]
 async fn async_try_new() {
     let bar = BoxAndRefAsyncTryBuilder {
@@ -123,7 +123,7 @@ async fn async_try_new() {
 
 // Miri crashes with Pin<Box<Future>> types due to
 // https://github.com/rust-lang/miri/issues/1038
-#[cfg(all(not(feature = "miri"), feature = "tokio"))]
+#[cfg(all(not(feature = "miri"), feature = "std"))]
 #[tokio::test]
 async fn async_try_new_err() {
     let result = BoxAndRefAsyncTryBuilder {
