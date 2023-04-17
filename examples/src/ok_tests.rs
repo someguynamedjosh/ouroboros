@@ -94,6 +94,7 @@ fn box_and_ref() {
 #[cfg(all(not(feature = "miri"), feature = "tokio"))]
 #[tokio::test]
 async fn async_new() {
+    use std::future::Future;
     let bar = BoxAndRefAsyncBuilder {
         data: 12,
         dref_builder: |data| Box::pin(async move { data }),
