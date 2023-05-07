@@ -17,7 +17,7 @@ use crate::{
     info_structures::Options,
     parse::parse_struct,
 };
-use inflector::Inflector;
+use heck::ToSnakeCase;
 use info_structures::BuilderType;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
