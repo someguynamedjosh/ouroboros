@@ -9,7 +9,7 @@ mod utils;
 use crate::{
     generate::{
         constructor::create_builder_and_constructor, derives::create_derives,
-        into_heads::make_into_heads, struc::create_actual_struct_def,
+        into_heads::make_into_heads, struc::create_internal_struct_def,
         summon_checker::generate_checker_summoner,
         try_constructor::create_try_builder_and_constructor, type_asserts::make_type_asserts,
         with_all::make_with_all_function, with_each::make_with_functions,
@@ -17,6 +17,7 @@ use crate::{
     info_structures::Options,
     parse::parse_struct,
 };
+use generate::struc::create_actual_struct_def;
 use inflector::Inflector;
 use info_structures::BuilderType;
 use proc_macro::TokenStream;
@@ -37,6 +38,7 @@ fn self_referencing_impl(
     let info = parse_struct(original_struct_def)?;
 
     let actual_struct_def = create_actual_struct_def(&info)?;
+    let internal_struct_def = create_internal_struct_def(&info)?;
 
     let borrowchk_summoner = generate_checker_summoner(&info)?;
 
@@ -78,6 +80,7 @@ fn self_referencing_impl(
             use super::*;
             #[doc="The self-referencing struct."]
             #actual_struct_def
+            #internal_struct_def
             #borrowchk_summoner
             #builder_def
             #async_builder_def
