@@ -3,8 +3,8 @@ use quote::quote;
 
 use crate::info_structures::{Options, StructInfo};
 
-/// Returns the Heads struct.
-pub fn make_heads(info: &StructInfo, options: Options) -> TokenStream {
+/// Returns the Heads struct and a function to convert the original struct into a Heads instance.
+pub fn make_into_heads(info: &StructInfo, options: Options) -> (TokenStream, TokenStream) {
     let visibility = if options.do_pub_extras {
         info.vis.clone()
     } else {
@@ -51,6 +51,31 @@ pub fn make_heads(info: &StructInfo, options: Options) -> TokenStream {
             #(#head_fields),*
         }
     };
+    let documentation = concat!(
+        "This function drops all internally referencing fields and returns only the ",
+        "[head fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions) of this struct."
+    ).to_owned();
 
-    heads_struct_def
+    let documentation = if !options.do_no_doc {
+        quote! {
+            #[doc=#documentation]
+        }
+    } else {
+        quote! { #[doc(hidden)] }
+    };
+
+    let generic_args = info.generic_arguments();
+    let into_heads_fn = quote! {
+        #documentation
+        #[allow(clippy::drop_ref)]
+        #[allow(clippy::drop_copy)]
+        #[allow(clippy::drop_non_drop)]
+        #visibility fn into_heads(self) -> Heads<#(#generic_args),*> {
+            #(#code)*
+            Heads {
+                #(#field_initializers),*
+            }
+        }
+    };
+    (heads_struct_def, into_heads_fn)
 }
