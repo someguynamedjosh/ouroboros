@@ -180,16 +180,6 @@ fn try_new_recover_heads() {
 }
 
 #[test]
-fn into_heads() {
-    let bar = BoxAndRefBuilder {
-        data: 12,
-        dref_builder: |data| data,
-    }
-    .build();
-    assert!(bar.into_heads().data == 12);
-}
-
-#[test]
 fn box_and_mut_ref() {
     let mut bar = BoxAndMutRefBuilder {
         data: 12,

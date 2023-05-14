@@ -9,7 +9,7 @@ mod utils;
 use crate::{
     generate::{
         constructor::create_builder_and_constructor, derives::create_derives,
-        into_heads::make_into_heads, struc::create_actual_struct_def,
+        into_heads::make_heads, struc::create_actual_struct_def,
         summon_checker::generate_checker_summoner,
         try_constructor::create_try_builder_and_constructor, type_asserts::make_type_asserts,
         with_all::make_with_all_function, with_each::make_with_functions,
@@ -50,12 +50,15 @@ fn self_referencing_impl(
         create_try_builder_and_constructor(&info, options, BuilderType::Sync)?;
     let (async_try_builder_struct_name, async_try_builder_def, async_try_constructor_def) =
         create_try_builder_and_constructor(&info, options, BuilderType::Async)?;
-    let (async_send_try_builder_struct_name, async_send_try_builder_def, async_send_try_constructor_def) =
-        create_try_builder_and_constructor(&info, options, BuilderType::AsyncSend)?;
+    let (
+        async_send_try_builder_struct_name,
+        async_send_try_builder_def,
+        async_send_try_constructor_def,
+    ) = create_try_builder_and_constructor(&info, options, BuilderType::AsyncSend)?;
 
     let with_defs = make_with_functions(&info, options)?;
     let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(&info, options)?;
-    let (heads_struct_def, into_heads_fn) = make_into_heads(&info, options);
+    let heads_struct_def = make_heads(&info, options);
 
     let impls = create_derives(&info)?;
 
@@ -97,7 +100,6 @@ fn self_referencing_impl(
                 #async_send_try_constructor_def
                 #(#with_defs)*
                 #with_all_fn_defs
-                #into_heads_fn
             }
             #type_asserts_def
         }
