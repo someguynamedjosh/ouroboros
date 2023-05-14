@@ -154,23 +154,12 @@ pub fn create_builder_and_constructor(
         BuilderType::Sync => quote! { fn new },
     };
     let field_names: Vec<_> = info.fields.iter().map(|field| field.name.clone()).collect();
-    let internal_ident = &info.internal_ident;
     let constructor_def = quote! {
         #documentation
         #vis #constructor_fn(#(#params),*) -> #struct_name <#(#generic_args),*> {
-            ::ouroboros::macro_help::const_assert_eq!(
-                ::core::mem::size_of::<#struct_name<#(#generic_args),*>>(), 
-                ::core::mem::size_of::<#internal_ident<#(#generic_args),*>>()
-            );
-            ::ouroboros::macro_help::const_assert_eq!(
-                ::core::mem::align_of::<#struct_name<#(#generic_args),*>>(), 
-                ::core::mem::align_of::<#internal_ident<#(#generic_args),*>>()
-            );
             #(#code)*
-            unsafe {
-                ::core::mem::transmute(#internal_ident<#(#generic_args),*> {
-                    #(#field_names),*
-                })
+            Self {
+                #(#field_names),*
             }
         }
     };
