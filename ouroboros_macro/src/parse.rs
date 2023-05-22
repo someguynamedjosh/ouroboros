@@ -5,7 +5,7 @@ use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct};
 use crate::{
     covariance_detection::type_is_covariant_over_this_lifetime,
     info_structures::{BorrowRequest, Derive, FieldType, StructFieldInfo, StructInfo},
-    utils::submodule_contents_visiblity,
+    utils::submodule_contents_visibility,
 };
 
 fn handle_borrows_attr(
@@ -176,7 +176,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
                 }
                 // We should not be able to access the field outside of the hidden module where
                 // everything is generated.
-                let with_vis = submodule_contents_visiblity(&field.vis.clone());
+                let with_vis = submodule_contents_visibility(&field.vis.clone());
                 fields.push(StructFieldInfo {
                     name: field.ident.clone().expect("Named field has no name."),
                     typ: field.ty.clone(),

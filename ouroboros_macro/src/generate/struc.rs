@@ -10,7 +10,7 @@ use syn::Error;
 /// fields, collecting metadata about them, reversing the order everything is stored in, and
 /// converting any uses of 'this to 'static.
 pub fn create_actual_struct_def(info: &StructInfo) -> Result<TokenStream, Error> {
-    let vis = utils::submodule_contents_visiblity(&info.vis);
+    let vis = utils::submodule_contents_visibility(&info.vis);
     let ident = &info.ident;
     let generics = &info.generics;
 
