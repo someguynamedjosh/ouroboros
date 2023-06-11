@@ -17,7 +17,7 @@ use crate::{
     info_structures::Options,
     parse::parse_struct,
 };
-use generate::{struc::create_actual_struct_def, drop::create_drop_impl};
+use generate::struc::create_actual_struct_def;
 use inflector::Inflector;
 use info_structures::BuilderType;
 use proc_macro::TokenStream;
@@ -39,7 +39,6 @@ fn self_referencing_impl(
 
     let actual_struct_def = create_actual_struct_def(&info)?;
     let internal_struct_def = create_internal_struct_def(&info)?;
-    let drop_impl = create_drop_impl(&info)?;
 
     let borrowchk_summoner = generate_checker_summoner(&info)?;
 
@@ -82,7 +81,6 @@ fn self_referencing_impl(
             #[doc="The self-referencing struct."]
             #actual_struct_def
             #internal_struct_def
-            #drop_impl
             #borrowchk_summoner
             #builder_def
             #async_builder_def

@@ -13,7 +13,6 @@ pub fn create_builder_and_constructor(
 ) -> Result<(Ident, TokenStream, TokenStream), Error> {
     let struct_name = info.ident.clone();
     let generic_args = info.generic_arguments();
-    let generic_args_with_static_lifetimes = info.generic_arguments_with_static_lifetimes();
 
     let vis = if options.do_pub_extras {
         info.vis.clone()
@@ -160,16 +159,16 @@ pub fn create_builder_and_constructor(
         #documentation
         #vis #constructor_fn(#(#params),*) -> #struct_name <#(#generic_args),*> {
             ::ouroboros::macro_help::const_assert_eq!(
-                ::core::mem::size_of::<#struct_name<#(#generic_args_with_static_lifetimes),*>>(),
-                ::core::mem::size_of::<#internal_ident<#(#generic_args_with_static_lifetimes),*>>()
+                ::core::mem::size_of::<#struct_name<#(#generic_args),*>>(), 
+                ::core::mem::size_of::<#internal_ident<#(#generic_args),*>>()
             );
             ::ouroboros::macro_help::const_assert_eq!(
-                ::core::mem::align_of::<#struct_name<#(#generic_args_with_static_lifetimes),*>>(),
-                ::core::mem::align_of::<#internal_ident<#(#generic_args_with_static_lifetimes),*>>()
+                ::core::mem::align_of::<#struct_name<#(#generic_args),*>>(), 
+                ::core::mem::align_of::<#internal_ident<#(#generic_args),*>>()
             );
             #(#code)*
             unsafe {
-                ::core::mem::transmute(#internal_ident::<#(#generic_args),*> {
+                ::core::mem::transmute(#internal_ident<#(#generic_args),*> {
                     #(#field_names),*
                 })
             }

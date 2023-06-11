@@ -1,6 +1,5 @@
 pub mod constructor;
 pub mod derives;
-pub mod drop;
 pub mod into_heads;
 pub mod struc;
 pub mod summon_checker;
