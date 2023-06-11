@@ -14,7 +14,7 @@ pub fn create_actual_struct_def(info: &StructInfo) -> Result<TokenStream, Error>
         fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
     }
     let generic_params = info.generic_params();
-    let generic_args = info.generic_arguments();
+    let generic_args = info.generic_arguments_with_static_lifetimes();
     let generic_where = &info.generics.where_clause;
     let ident = &info.ident;
     let internal_ident = &info.internal_ident;
@@ -22,6 +22,7 @@ pub fn create_actual_struct_def(info: &StructInfo) -> Result<TokenStream, Error>
         #visibility struct #ident <#generic_params> #generic_where {
             actual_data: [u8; ::core::mem::size_of::<#internal_ident<#(#generic_args),*>>()],
             _alignment: [#internal_ident<#(#generic_args),*>; 0],
+            #(#fields),*
         }
     })
 }
@@ -33,7 +34,6 @@ pub fn create_actual_struct_def(info: &StructInfo) -> Result<TokenStream, Error>
 /// but references *created* inside a function can be considered invalid
 /// whenever, even during the duration of the function.)
 pub fn create_internal_struct_def(info: &StructInfo) -> Result<TokenStream, Error> {
-    let vis = quote! { pub(super) };
     let ident = &info.internal_ident;
     let generics = &info.generics;
 
@@ -60,7 +60,7 @@ pub fn create_internal_struct_def(info: &StructInfo) -> Result<TokenStream, Erro
         where_clause = quote! { #clause };
     }
     let def = quote! {
-        #vis struct #ident #generics #where_clause {
+        struct #ident #generics #where_clause {
             #(#field_defs),*
         }
     };
