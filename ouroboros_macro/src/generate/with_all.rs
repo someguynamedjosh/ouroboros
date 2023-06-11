@@ -16,20 +16,19 @@ pub fn make_with_all_function(
     let mut field_assignments = Vec::new();
     let mut mut_fields = Vec::new();
     let mut mut_field_assignments = Vec::new();
-    let internal_struct = &info.internal_ident;
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
     for field in info.fields.iter().rev() {
         let field_name = &field.name;
         let field_type = &field.typ;
         if field.field_type == FieldType::Tail {
             fields.push(quote! { #visibility #field_name: &'outer_borrow #field_type });
-            field_assignments.push(quote! { #field_name: &this.#field_name });
+            field_assignments.push(quote! { #field_name: &self.#field_name });
             mut_fields.push(quote! { #visibility #field_name: &'outer_borrow mut #field_type });
-            mut_field_assignments.push(quote! { #field_name: &mut this.#field_name });
+            mut_field_assignments.push(quote! { #field_name: &mut self.#field_name });
         } else if field.field_type == FieldType::Borrowed {
             let ass = quote! { #field_name: unsafe {
                 ::ouroboros::macro_help::change_lifetime(
-                    &*this.#field_name
+                    &*self.#field_name
                 )
             } };
             fields.push(quote! { #visibility #field_name: &'this #field_type });
@@ -109,7 +108,6 @@ pub fn make_with_all_function(
     } else {
         quote! { #[doc(hidden)] }
     };
-    let generic_args = info.generic_arguments();
     let fn_defs = quote! {
         #documentation
         #[inline(always)]
@@ -117,7 +115,6 @@ pub fn make_with_all_function(
             &'outer_borrow self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_fields_type) -> ReturnType
         ) -> ReturnType {
-            let this: &#internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
             user(BorrowedFields {
                 #(#field_assignments),*
             })
@@ -128,7 +125,6 @@ pub fn make_with_all_function(
             &'outer_borrow mut self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_mut_fields_type) -> ReturnType
         ) -> ReturnType {
-            let this: &mut #internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
             user(BorrowedMutFields {
                 #(#mut_field_assignments),*
             })

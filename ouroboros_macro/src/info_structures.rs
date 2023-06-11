@@ -12,16 +12,6 @@ pub struct Options {
     pub do_pub_extras: bool,
 }
 
-impl Options {
-    pub fn documentation_to_tokens(&self, documentation: &str) -> TokenStream {
-        if self.do_no_doc {
-            quote! { #[doc(hidden)] }
-        } else {
-            quote! { #[doc=#documentation] }
-        }
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 pub enum FieldType {
     /// Not borrowed by other parts of the struct.
@@ -71,7 +61,6 @@ impl BuilderType {
 pub struct StructInfo {
     pub derives: Vec<Derive>,
     pub ident: Ident,
-    pub internal_ident: Ident,
     pub generics: Generics,
     pub vis: Visibility,
     pub fields: Vec<StructFieldInfo>,

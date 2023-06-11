@@ -262,7 +262,6 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
     return Ok(StructInfo {
         derives,
         ident: def.ident.clone(),
-        internal_ident: format_ident!("{}Internal", def.ident),
         generics: def.generics.clone(),
         fields,
         vis,

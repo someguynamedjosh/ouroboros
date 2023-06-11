@@ -5,8 +5,6 @@ use syn::Error;
 
 pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<TokenStream>, Error> {
     let mut users = Vec::new();
-    let internal_struct = &info.internal_ident;
-    let generic_args = info.generic_arguments();
     for field in &info.fields {
         let visibility = &field.vis;
         let field_name = &field.name;
@@ -36,8 +34,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
                 ) -> ReturnType {
-                    let this: &#internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
-                    user(&this. #field_name)
+                    user(&self. #field_name)
                 }
             });
             if field.covariant == Some(true) {
@@ -48,8 +45,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                     #visibility fn #borrower_name<'this>(
                         &'this self,
                     ) -> &'this #field_type {
-                        let this: &#internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
-                        &this.#field_name
+                        &self.#field_name
                     }
                 });
             } else if field.covariant.is_none() {
@@ -80,8 +76,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                     &'outer_borrow mut self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow mut #field_type) -> ReturnType,
                 ) -> ReturnType {
-                    let this: &mut #internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
-                    user(&mut this. #field_name)
+                    user(&mut self. #field_name)
                 }
             });
         } else if field.field_type == FieldType::Borrowed {
@@ -107,8 +102,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                     &'outer_borrow self,
                     user: impl for<'this> ::core::ops::FnOnce(&'outer_borrow #field_type) -> ReturnType,
                 ) -> ReturnType {
-                    let this: &#internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
-                    user(&*this.#field_name)
+                    user(&*self.#field_name)
                 }
             });
             if field.self_referencing {
@@ -126,8 +120,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                 #visibility fn #borrower_name<'this>(
                     &'this self,
                 ) -> &'this #field_type {
-                    let this: &#internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
-                    &*this.#field_name
+                    &*self.#field_name
                 }
             });
         } else if field.field_type == FieldType::BorrowedMut {
