@@ -1,4 +1,4 @@
-use inflector::Inflector;
+use heck::ToSnakeCase;
 use proc_macro2::{Group, Ident, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use syn::{GenericParam, Generics, Visibility};
@@ -33,9 +33,9 @@ pub fn make_generic_consumers(generics: &Generics) -> impl Iterator<Item = (Toke
 }
 
 // Takes the generics parameters from the original struct and turns them into arguments.
-pub fn make_generic_arguments(generics: &Generics) -> Vec<TokenStream> {
+pub fn make_generic_arguments(generics: Vec<&GenericParam>) -> Vec<TokenStream> {
     let mut arguments = Vec::new();
-    for generic in generics.params.clone() {
+    for generic in generics {
         match generic {
             GenericParam::Type(typ) => {
                 let ident = &typ.ident;
@@ -90,7 +90,7 @@ pub fn replace_this_with_lifetime(input: TokenStream, lifetime: Ident) -> TokenS
         .collect()
 }
 
-pub fn submodule_contents_visiblity(original_visibility: &Visibility) -> Visibility {
+pub fn submodule_contents_visibility(original_visibility: &Visibility) -> Visibility {
     match original_visibility {
         // inherited: allow parent of inner submodule to see
         Visibility::Inherited => syn::parse_quote! { pub(super) },

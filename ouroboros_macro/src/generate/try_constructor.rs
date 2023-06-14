@@ -59,7 +59,7 @@ pub fn create_try_builder_and_constructor(
     let builder_documentation = concat!(
         "A more verbose but stable way to construct self-referencing structs. It is ",
         "comparable to using `StructName { field1: value1, field2: value2 }` rather than ",
-        "`StructName::new(value1, value2)`. This has the dual benefit of makin your code ",
+        "`StructName::new(value1, value2)`. This has the dual benefit of making your code ",
         "both easier to refactor and more readable. Call [`try_build()`](Self::try_build) or ",
         "[`try_build_or_recover()`](Self::try_build_or_recover) to ",
         "construct the actual struct. The fields of this struct should be used as follows:\n\n",
@@ -69,14 +69,14 @@ pub fn create_try_builder_and_constructor(
     let build_fn_documentation = format!(
         concat!(
             "Calls [`{0}::try_new()`]({0}::try_new) using the provided values. This is ",
-            "preferrable over calling `try_new()` directly for the reasons listed above. "
+            "preferable over calling `try_new()` directly for the reasons listed above. "
         ),
         info.ident.to_string()
     );
     let build_or_recover_fn_documentation = format!(
         concat!(
             "Calls [`{0}::try_new_or_recover()`]({0}::try_new_or_recover) using the provided ",
-            "values. This is preferrable over calling `try_new_or_recover()` directly for the ",
+            "values. This is preferable over calling `try_new_or_recover()` directly for the ",
             "reasons listed above. "
         ),
         info.ident.to_string()
@@ -118,7 +118,7 @@ pub fn create_try_builder_and_constructor(
             }
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
-            // contructor, and generic parameters need to be added to the builder struct to make
+            // constructor, and generic parameters need to be added to the builder struct to make
             // it work.
             let builder_name = field.builder_name();
             params.push(quote! { #builder_name : impl #bound_type });
@@ -223,6 +223,7 @@ pub fn create_try_builder_and_constructor(
         quote! { #struct_name::#or_recover_ident(#(#builder_struct_field_names),*).map_err(|(error, _heads)| error) }
     };
     let field_names: Vec<_> = info.fields.iter().map(|field| field.name.clone()).collect();
+    let internal_ident = &info.internal_ident;
     let constructor_def = quote! {
         #documentation
         #visibility #constructor_fn<Error_>(#(#params),*) -> ::core::result::Result<#struct_name <#(#generic_args),*>, Error_> {
@@ -231,7 +232,9 @@ pub fn create_try_builder_and_constructor(
         #or_recover_documentation
         #visibility #or_recover_constructor_fn<Error_>(#(#params),*) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
-            ::core::result::Result::Ok(Self { #(#field_names),* })
+            ::core::result::Result::Ok(unsafe {
+                ::core::mem::transmute(#internal_ident { #(#field_names),* })
+            })
         }
     };
     builder_struct_generic_producers.push(quote! { Error_ });

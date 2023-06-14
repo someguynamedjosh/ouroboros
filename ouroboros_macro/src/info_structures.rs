@@ -12,6 +12,16 @@ pub struct Options {
     pub do_pub_extras: bool,
 }
 
+impl Options {
+    // pub fn documentation_to_tokens(&self, documentation: &str) -> TokenStream {
+    //     if self.do_no_doc {
+    //         quote! { #[doc(hidden)] }
+    //     } else {
+    //         quote! { #[doc=#documentation] }
+    //     }
+    // }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum FieldType {
     /// Not borrowed by other parts of the struct.
@@ -61,6 +71,7 @@ impl BuilderType {
 pub struct StructInfo {
     pub derives: Vec<Derive>,
     pub ident: Ident,
+    pub internal_ident: Ident,
     pub generics: Generics,
     pub vis: Visibility,
     pub fields: Vec<StructFieldInfo>,
@@ -77,6 +88,20 @@ impl StructInfo {
 
     pub fn generic_params(&self) -> &Punctuated<GenericParam, Comma> {
         &self.generics.params
+    }
+
+    pub fn generic_params_without_lifetimes(&self) -> Vec<&GenericParam> {
+        self.generics
+            .params
+            .iter()
+            .filter(|p| {
+                if let GenericParam::Lifetime(..) = p {
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect()
     }
 
     /// Same as generic_params but with 'this and 'outer_borrow prepended.
@@ -104,7 +129,15 @@ impl StructInfo {
     }
 
     pub fn generic_arguments(&self) -> Vec<TokenStream> {
-        make_generic_arguments(&self.generics)
+        make_generic_arguments(self.generics.params.iter().collect())
+    }
+
+    pub fn generic_arguments_with_static_lifetimes(&self) -> Vec<TokenStream> {
+        let mut result = make_generic_arguments(self.generic_params_without_lifetimes());
+        for _ in 0..self.generics.lifetimes().count() {
+            result.insert(0, quote! { 'static });
+        }
+        result
     }
 
     /// Same as generic_arguments but with 'outer_borrow and 'this prepended.
