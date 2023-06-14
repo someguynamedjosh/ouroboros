@@ -8,7 +8,7 @@ use syn::Error;
 
 /// Creates the struct that will actually store the data.
 pub fn create_actual_struct_def(info: &StructInfo) -> Result<TokenStream, Error> {
-    let visibility = utils::submodule_contents_visiblity(&info.vis);
+    let visibility = utils::submodule_contents_visibility(&info.vis);
     let mut fields = Vec::new();
     for (ty, ident) in info.generic_consumers() {
         fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
