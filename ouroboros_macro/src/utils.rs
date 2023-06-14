@@ -33,9 +33,9 @@ pub fn make_generic_consumers(generics: &Generics) -> impl Iterator<Item = (Toke
 }
 
 // Takes the generics parameters from the original struct and turns them into arguments.
-pub fn make_generic_arguments(generics: &Generics) -> Vec<TokenStream> {
+pub fn make_generic_arguments(generics: Vec<&GenericParam>) -> Vec<TokenStream> {
     let mut arguments = Vec::new();
-    for generic in generics.params.clone() {
+    for generic in generics {
         match generic {
             GenericParam::Type(typ) => {
                 let ident = &typ.ident;

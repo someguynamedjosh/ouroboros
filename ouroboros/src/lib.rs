@@ -123,7 +123,7 @@
 ///         immutable: i32,
 ///         mutable: i32,
 ///         #[borrows(immutable, mut mutable)]
-///         #[covariant]
+///         #[not_covariant]
 ///         complex_data: ComplexData<'this, 'this>,
 ///     }
 ///
@@ -351,6 +351,7 @@ pub mod macro_help {
     pub extern crate alloc;
 
     pub use aliasable::boxed::AliasableBox;
+    pub use static_assertions::const_assert_eq;
     use aliasable::boxed::UniqueBox;
 
     pub struct CheckIfTypeIsStd<T>(core::marker::PhantomData<T>);

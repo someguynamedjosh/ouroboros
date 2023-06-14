@@ -1,6 +1,11 @@
 error: Ouroboros cannot automatically determine if this type is covariant.
 
-       If it is covariant, it should be legal to convert any instance of that type to an instance of that type where all usages of 'this are replaced with a smaller lifetime. For example, Box<&'this i32> is covariant because it is legal to use it as a Box<&'a i32> where 'this: 'a. In contrast, Fn(&'this i32) cannot be used as Fn(&'a i32).
+       As an example, a Box<&'this ()> is covariant because it can be used as a
+       Box<&'smaller ()> for any lifetime smaller than 'this. In contrast,
+       a Fn(&'this ()) is not covariant because it cannot be used as a
+       Fn(&'smaller ()). In general, values that are safe to use with smaller
+       lifetimes than they were defined with are covariant, breaking this
+       guarantee means the value is not covariant.
 
        To resolve this error, add #[covariant] or #[not_covariant] to the field.
   --> src/fail_tests/auto_covariant.rs:11:12
