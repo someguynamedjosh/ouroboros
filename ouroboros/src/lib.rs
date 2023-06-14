@@ -123,7 +123,7 @@
 ///         immutable: i32,
 ///         mutable: i32,
 ///         #[borrows(immutable, mut mutable)]
-///         #[covariant]
+///         #[not_covariant]
 ///         complex_data: ComplexData<'this, 'this>,
 ///     }
 ///

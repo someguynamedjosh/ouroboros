@@ -10,6 +10,10 @@ Dual licensed under MIT / Apache 2.0.
 While this crate is `no_std` compatible, it still requires the `alloc` crate.
 
 Version notes:
+- Version `0.17.0` fixed a potential soundness issue, but removed support for
+  template parameters in the process. Lifetime parameters are still supported.
+  As of 2023-06-13, the compiler is practically sound with 0.16 but this may
+  stop being the case at any time and without warning.
 - Version `0.13.0` and later contain checks for additional situations which
   cause undefined behavior if not caught.
 - Version `0.11.0` and later place restrictions on derive macros, earlier

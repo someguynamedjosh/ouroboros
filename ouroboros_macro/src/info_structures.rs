@@ -13,13 +13,13 @@ pub struct Options {
 }
 
 impl Options {
-    pub fn documentation_to_tokens(&self, documentation: &str) -> TokenStream {
-        if self.do_no_doc {
-            quote! { #[doc(hidden)] }
-        } else {
-            quote! { #[doc=#documentation] }
-        }
-    }
+    // pub fn documentation_to_tokens(&self, documentation: &str) -> TokenStream {
+    //     if self.do_no_doc {
+    //         quote! { #[doc(hidden)] }
+    //     } else {
+    //         quote! { #[doc=#documentation] }
+    //     }
+    // }
 }
 
 #[derive(Clone, Copy, PartialEq)]

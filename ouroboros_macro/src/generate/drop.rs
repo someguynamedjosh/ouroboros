@@ -1,7 +1,4 @@
-use crate::{
-    info_structures::StructInfo,
-    utils::{self, replace_this_with_lifetime},
-};
+use crate::info_structures::StructInfo;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Error;

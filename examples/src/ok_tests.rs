@@ -1,4 +1,4 @@
-use alloc::boxed::Box;
+use alloc::{boxed::Box, borrow::ToOwned};
 use core::fmt::Debug;
 
 use ouroboros::self_referencing;
@@ -31,7 +31,7 @@ struct ChainedAndUndocumented {
     data: i32,
     #[borrows(data)]
     ref1: &'this i32,
-    #[borrows(data)]
+    #[borrows(ref1)]
     ref2: &'this &'this i32,
 }
 
@@ -245,6 +245,12 @@ fn single_lifetime() {
         #[borrows(external)]
         internal: &'this &'a str,
     }
+
+    let external = "Hello world!".to_owned();
+    let instance = Struct::new(&external, |field_ref| field_ref);
+    drop(instance.borrow_external());
+    drop(instance.borrow_internal());
+    drop(instance);
 }
 
 #[test]
