@@ -90,7 +90,7 @@ pub fn replace_this_with_lifetime(input: TokenStream, lifetime: Ident) -> TokenS
         .collect()
 }
 
-pub fn submodule_contents_visiblity(original_visibility: &Visibility) -> Visibility {
+pub fn submodule_contents_visibility(original_visibility: &Visibility) -> Visibility {
     match original_visibility {
         // inherited: allow parent of inner submodule to see
         Visibility::Inherited => syn::parse_quote! { pub(super) },

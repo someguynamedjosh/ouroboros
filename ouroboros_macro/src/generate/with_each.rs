@@ -131,7 +131,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                 }
             });
         } else if field.field_type == FieldType::BorrowedMut {
-            // Do not generate anything becaue if it is borrowed mutably once, we should not be able
+            // Do not generate anything because if it is borrowed mutably once, we should not be able
             // to get any other kinds of references to it.
         }
     }

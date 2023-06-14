@@ -18,7 +18,7 @@ pub fn generate_checker_summoner(info: &StructInfo) -> Result<TokenStream, Error
             params.push(quote! { #field_name: #plain_type });
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
-            // contructor, and generic parameters need to be added to the builder struct to make
+            // constructor, and generic parameters need to be added to the builder struct to make
             // it work.
             let builder_name = field.builder_name();
             params.push(quote! { #builder_name : impl #bound_type });

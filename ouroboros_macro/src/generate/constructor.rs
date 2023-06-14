@@ -46,7 +46,7 @@ pub fn create_builder_and_constructor(
     .to_owned();
     let build_fn_documentation = format!(
         concat!(
-            "Calls [`{0}::new()`]({0}::new) using the provided values. This is preferrable over ",
+            "Calls [`{0}::new()`]({0}::new) using the provided values. This is preferable over ",
             "calling `new()` directly for the reasons listed above. "
         ),
         info.ident.to_string()
@@ -80,7 +80,7 @@ pub fn create_builder_and_constructor(
             );
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
-            // contructor, and generic parameters need to be added to the builder struct to make
+            // constructor, and generic parameters need to be added to the builder struct to make
             // it work.
             let builder_name = field.builder_name();
             params.push(quote! { #builder_name : impl #bound_type });

@@ -58,7 +58,7 @@ fn main() {
         float_reference_builder: |float_data: &mut f32| float_data,
     }.build();
 
-    // The fields in the original struct can not be accesed directly
+    // The fields in the original struct can not be accessed directly
     // The builder creates accessor methods which are called borrow_{field_name}()
 
     // Prints 42

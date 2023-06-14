@@ -39,7 +39,7 @@
 ///         float_reference_builder: |float_data: &mut f32| float_data,
 ///     }.build();
 ///
-///     // The fields in the original struct can not be accesed directly
+///     // The fields in the original struct can not be accessed directly
 ///     // The builder creates accessor methods which are called borrow_{field_name}()
 ///
 ///     // Prints 42
@@ -303,12 +303,12 @@
 /// ### `MyStructAsyncSendBuilder`
 /// Same as MyStructAsyncBuilder, but with Send trait specified in the return type.
 /// ### `MyStruct::try_new<E>(fields...) -> Result<MyStruct, E>`
-/// Similar to the regular `new()` function, except the functions wich create values for all
+/// Similar to the regular `new()` function, except the functions which create values for all
 /// **self-referencing fields** can return `Result<>`s. If any of those are `Err`s, that error will be
 /// returned instead of an instance of `MyStruct`. The preferred way to use this function is through
 /// `MyStructTryBuilder` and its `try_build()` function.
 /// ### `MyStruct::try_new_async<E>(fields...) -> Result<MyStruct, E>`
-/// Similar to the regular `new_async()` function, except the functions wich create values for all
+/// Similar to the regular `new_async()` function, except the functions which create values for all
 /// **self-referencing fields** can return `Result<>`s. If any of those are `Err`s, that error will be
 /// returned instead of an instance of `MyStruct`. The preferred way to use this function is through
 /// `MyStructAsyncTryBuilder` and its `try_build()` function.
