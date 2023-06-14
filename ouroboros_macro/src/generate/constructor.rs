@@ -13,6 +13,7 @@ pub fn create_builder_and_constructor(
 ) -> Result<(Ident, TokenStream, TokenStream), Error> {
     let struct_name = info.ident.clone();
     let generic_args = info.generic_arguments();
+    let generic_args_with_static_lifetimes = info.generic_arguments_with_static_lifetimes();
 
     let vis = if options.do_pub_extras {
         info.vis.clone()
@@ -45,7 +46,7 @@ pub fn create_builder_and_constructor(
     .to_owned();
     let build_fn_documentation = format!(
         concat!(
-            "Calls [`{0}::new()`]({0}::new) using the provided values. This is preferrable over ",
+            "Calls [`{0}::new()`]({0}::new) using the provided values. This is preferable over ",
             "calling `new()` directly for the reasons listed above. "
         ),
         info.ident.to_string()
@@ -79,7 +80,7 @@ pub fn create_builder_and_constructor(
             );
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
-            // contructor, and generic parameters need to be added to the builder struct to make
+            // constructor, and generic parameters need to be added to the builder struct to make
             // it work.
             let builder_name = field.builder_name();
             params.push(quote! { #builder_name : impl #bound_type });
@@ -154,12 +155,23 @@ pub fn create_builder_and_constructor(
         BuilderType::Sync => quote! { fn new },
     };
     let field_names: Vec<_> = info.fields.iter().map(|field| field.name.clone()).collect();
+    let internal_ident = &info.internal_ident;
     let constructor_def = quote! {
         #documentation
         #vis #constructor_fn(#(#params),*) -> #struct_name <#(#generic_args),*> {
+            ::ouroboros::macro_help::const_assert_eq!(
+                ::core::mem::size_of::<#struct_name<#(#generic_args_with_static_lifetimes),*>>(),
+                ::core::mem::size_of::<#internal_ident<#(#generic_args_with_static_lifetimes),*>>()
+            );
+            ::ouroboros::macro_help::const_assert_eq!(
+                ::core::mem::align_of::<#struct_name<#(#generic_args_with_static_lifetimes),*>>(),
+                ::core::mem::align_of::<#internal_ident<#(#generic_args_with_static_lifetimes),*>>()
+            );
             #(#code)*
-            Self {
-                #(#field_names),*
+            unsafe {
+                ::core::mem::transmute(#internal_ident::<#(#generic_args),*> {
+                    #(#field_names),*
+                })
             }
         }
     };
