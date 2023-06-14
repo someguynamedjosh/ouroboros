@@ -20,7 +20,7 @@ pub fn create_actual_struct_def(info: &StructInfo) -> Result<TokenStream, Error>
     let internal_ident = &info.internal_ident;
     Ok(quote! {
         #visibility struct #ident <#generic_params> #generic_where {
-            actual_data: [u8; ::core::mem::size_of::<#internal_ident<#(#generic_args),*>>()],
+            actual_data: ::core::mem::MaybeUninit<[u8; ::core::mem::size_of::<#internal_ident<#(#generic_args),*>>()]>,
             _alignment: [#internal_ident<#(#generic_args),*>; 0],
             #(#fields),*
         }
