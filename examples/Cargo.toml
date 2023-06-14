@@ -1,6 +1,6 @@
 [package]
 name = "ouroboros_examples"
-version = "0.15.7"
+version = "0.17.0"
 authors = ["Joshua Maros <joshua-maros@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -21,7 +21,7 @@ std = []
 __tokio = ["tokio", "std"]
 
 [dependencies]
-ouroboros = { version = "0.15.7", path = "../ouroboros" }
+ouroboros = { version = "0.17.0", path = "../ouroboros" }
 tokio = { version = "1.27.0", features = [ "macros", "rt" ], optional = true }
 
 [dev-dependencies]
