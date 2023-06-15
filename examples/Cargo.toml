@@ -14,11 +14,10 @@ rustdoc-args = ["--document-private-items"]
 [lib]
 
 [features]
-default = []
+default = ["std"]
 # Disables any tests that are not compatible or not intended to run under Miri
 miri = []
 std = []
-__tokio = ["tokio", "std"]
 
 [dependencies]
 ouroboros = { version = "0.17.0", path = "../ouroboros" }
@@ -27,3 +26,4 @@ tokio = { version = "1.27.0", features = [ "macros", "rt" ], optional = true }
 [dev-dependencies]
 rustversion = "1.0.11"
 trybuild = "=1.0.50"
+tokio = { version = "1.25.0", features = [ "macros", "rt" ] }

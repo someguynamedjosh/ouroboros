@@ -14,15 +14,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        RUST: ["1.48", stable, beta, nightly]
+        RUST: ["1.56", stable, beta, nightly]
     steps:
       - uses: actions/checkout@v2
       - name: Set Rust version
         run: rustup default ${{ matrix.RUST }}
       - name: Build
-        run: cargo build --verbose ${{ matrix.RUST != '1.48' && '--features=__tokio' || '' }}
+        run: cargo build --verbose
       - name: Run tests
-        run: cargo test --verbose ${{ matrix.RUST != '1.48' && '--features=__tokio' || '' }}
+        run: cargo test --verbose
 
   no-std-test:
     runs-on: ubuntu-latest
