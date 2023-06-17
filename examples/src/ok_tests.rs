@@ -50,24 +50,24 @@ struct AutoDetectCovarianceOnFieldsWithoutThis {
     self_reference: &'this (),
 }
 
-// /// This test just makes sure that the macro copes with a ton of template parameters being thrown at
-// /// it, specifically checking that the templates work fine even when a generated struct doesn't need
-// /// all of them. (E.G. heads will only contain 'd, A, and B.)
-// #[self_referencing]
-// struct TemplateMess<'d, A, B: 'static, C: 'static>
-// where
-//     A: ?Sized,
-//     B: 'static,
-//     C: 'static,
-// {
-//     external: &'d A,
-//     data1: B,
-//     #[borrows(data1)]
-//     data2: &'this C,
-//     data3: B,
-//     #[borrows(mut data3)]
-//     data4: &'this mut C,
-// }
+/// This test just makes sure that the macro copes with a ton of template parameters being thrown at
+/// it, specifically checking that the templates work fine even when a generated struct doesn't need
+/// all of them. (E.G. heads will only contain 'd, A, and B.)
+#[self_referencing]
+struct TemplateMess<'d, A, B: 'static, C: 'static>
+where
+    A: ?Sized,
+    B: 'static,
+    C: 'static,
+{
+    external: &'d A,
+    data1: B,
+    #[borrows(data1)]
+    data2: &'this C,
+    data3: B,
+    #[borrows(mut data3)]
+    data4: &'this mut C,
+}
 
 // /// Regression test for #46
 // #[self_referencing]

@@ -14,15 +14,14 @@ pub fn create_actual_struct_def(info: &StructInfo) -> Result<TokenStream, Error>
         fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
     }
     let generic_params = info.generic_params();
-    let generic_args = info.generic_arguments_with_static_lifetimes();
+    let generic_args = info.generic_arguments();
     let generic_where = &info.generics.where_clause;
     let ident = &info.ident;
     let internal_ident = &info.internal_ident;
     Ok(quote! {
+        #[repr(transparent)]
         #visibility struct #ident <#generic_params> #generic_where {
-            actual_data: ::core::mem::MaybeUninit<[u8; ::core::mem::size_of::<#internal_ident<#(#generic_args),*>>()]>,
-            _alignment: [#internal_ident<#(#generic_args),*>; 0],
-            #(#fields),*
+            actual_data: ::core::mem::MaybeUninit<#internal_ident<#(#generic_args),*>>,
         }
     })
 }

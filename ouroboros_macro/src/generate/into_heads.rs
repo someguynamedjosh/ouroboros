@@ -72,7 +72,9 @@ pub fn make_into_heads(info: &StructInfo, options: Options) -> (TokenStream, Tok
         #[allow(clippy::drop_copy)]
         #[allow(clippy::drop_non_drop)]
         #visibility fn into_heads(self) -> Heads<#(#generic_args),*> {
-            let this: #internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
+            let this_ptr = &self as *const _;
+            let this: #internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute_copy(&*this_ptr) };
+            ::core::mem::forget(self);
             #(#code)*
             Heads {
                 #(#field_initializers),*

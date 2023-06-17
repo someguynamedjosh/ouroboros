@@ -5,7 +5,6 @@ use syn::Error;
 
 pub fn create_drop_impl(info: &StructInfo) -> Result<TokenStream, Error> {
     let ident = &info.ident;
-    let internal_ident = &info.internal_ident;
     let generics = &info.generics;
     let generic_args = info.generic_arguments();
 
@@ -16,9 +15,7 @@ pub fn create_drop_impl(info: &StructInfo) -> Result<TokenStream, Error> {
     Ok(quote! {
         impl #generics ::core::ops::Drop for #ident<#(#generic_args,)*> #where_clause {
             fn drop(&mut self) {
-                unsafe {
-                    ::core::ptr::drop_in_place(::core::mem::transmute::<_, *mut #internal_ident <#(#generic_args,)*>>(self));
-                }
+                unsafe { self.actual_data.assume_init_drop() };
             }
         }
     })

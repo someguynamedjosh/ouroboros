@@ -109,7 +109,6 @@ pub fn make_with_all_function(
     } else {
         quote! { #[doc(hidden)] }
     };
-    let generic_args = info.generic_arguments();
     let fn_defs = quote! {
         #documentation
         #[inline(always)]
@@ -117,7 +116,7 @@ pub fn make_with_all_function(
             &'outer_borrow self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_fields_type) -> ReturnType
         ) -> ReturnType {
-            let this: &#internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
+            let this = unsafe { self.actual_data.assume_init_ref() };
             user(BorrowedFields {
                 #(#field_assignments),*
             })
@@ -128,7 +127,7 @@ pub fn make_with_all_function(
             &'outer_borrow mut self,
             user: impl for<'this> ::core::ops::FnOnce(#borrowed_mut_fields_type) -> ReturnType
         ) -> ReturnType {
-            let this: &mut #internal_struct<#(#generic_args),*> = unsafe { ::core::mem::transmute(self) };
+            let this = unsafe { self.actual_data.assume_init_mut() };
             user(BorrowedMutFields {
                 #(#mut_field_assignments),*
             })

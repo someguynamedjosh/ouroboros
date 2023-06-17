@@ -233,7 +233,11 @@ pub fn create_try_builder_and_constructor(
         #visibility #or_recover_constructor_fn<Error_>(#(#params),*) -> ::core::result::Result<#struct_name <#(#generic_args),*>, (Error_, Heads<#(#generic_args),*>)> {
             #(#or_recover_code)*
             ::core::result::Result::Ok(unsafe {
-                ::core::mem::transmute(#internal_ident { #(#field_names),* })
+                Self {
+                    actual_data: ::core::mem::MaybeUninit::new(#internal_ident {
+                        #(#field_names),*
+                    })
+                }
             })
         }
     };

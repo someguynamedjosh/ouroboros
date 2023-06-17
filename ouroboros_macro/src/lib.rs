@@ -17,15 +17,15 @@ use crate::{
     info_structures::Options,
     parse::parse_struct,
 };
+use generate::{drop::create_drop_impl, struc::create_actual_struct_def};
 use heck::ToSnakeCase;
-use generate::{struc::create_actual_struct_def, drop::create_drop_impl};
 use info_structures::BuilderType;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2::TokenTree;
 use proc_macro_error::proc_macro_error;
 use quote::{format_ident, quote};
-use syn::{Error, ItemStruct};
+use syn::{parse_quote, punctuated::Punctuated, token::Where, Error, ItemStruct, WhereClause};
 
 fn self_referencing_impl(
     original_struct_def: &ItemStruct,

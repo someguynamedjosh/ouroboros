@@ -159,19 +159,13 @@ pub fn create_builder_and_constructor(
     let constructor_def = quote! {
         #documentation
         #vis #constructor_fn(#(#params),*) -> #struct_name <#(#generic_args),*> {
-            ::ouroboros::macro_help::const_assert_eq!(
-                ::core::mem::size_of::<#struct_name<#(#generic_args_with_static_lifetimes),*>>(),
-                ::core::mem::size_of::<#internal_ident<#(#generic_args_with_static_lifetimes),*>>()
-            );
-            ::ouroboros::macro_help::const_assert_eq!(
-                ::core::mem::align_of::<#struct_name<#(#generic_args_with_static_lifetimes),*>>(),
-                ::core::mem::align_of::<#internal_ident<#(#generic_args_with_static_lifetimes),*>>()
-            );
             #(#code)*
             unsafe {
-                ::core::mem::transmute(#internal_ident::<#(#generic_args),*> {
-                    #(#field_names),*
-                })
+                Self {
+                    actual_data: ::core::mem::MaybeUninit::new(#internal_ident {
+                        #(#field_names),*
+                    })
+                }
             }
         }
     };

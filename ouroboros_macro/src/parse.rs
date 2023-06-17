@@ -138,18 +138,6 @@ fn parse_derive_attribute(attr: &Attribute) -> Result<Vec<Derive>, Error> {
 pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
     let vis = def.vis.clone();
     let generics = def.generics.clone();
-    if let Some(first_param) = generics.type_params().next() {
-        return Err(Error::new(
-            first_param.span(),
-            "Self-referencing structs currently cannot have type or constant parameters, only lifetime parameters.",
-        ));
-    }
-    if let Some(first_param) = generics.const_params().next() {
-        return Err(Error::new(
-            first_param.span(),
-            "Self-referencing structs currently cannot have type or constant parameters, only lifetime parameters.",
-        ));
-    }
     let mut actual_struct_def = def.clone();
     actual_struct_def.vis = vis.clone();
     let mut fields = Vec::new();
