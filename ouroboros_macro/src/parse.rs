@@ -119,20 +119,13 @@ fn parse_derive_attribute(attr: &Attribute) -> Result<Vec<Derive>, Error> {
         Meta::List(ml) => &ml.tokens,
         _ => unreachable!(),
     };
-    if let Some(TokenTree::Group(body)) = body.clone().into_iter().next() {
-        if body.delimiter() != Delimiter::Parenthesis {
-            panic!("TODO: nice error, bad define syntax")
+    let mut derives = Vec::new();
+    for token in body.clone().into_iter() {
+        if let Some(derive) = parse_derive_token(&token)? {
+            derives.push(derive);
         }
-        let mut derives = Vec::new();
-        for token in body.stream().into_iter() {
-            if let Some(derive) = parse_derive_token(&token)? {
-                derives.push(derive);
-            }
-        }
-        Ok(derives)
-    } else {
-        Err(Error::new(attr.span(), "bad syntax"))
     }
+    Ok(derives)
 }
 
 pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
