@@ -1,6 +1,6 @@
 use proc_macro2::{Delimiter, Span, TokenTree};
 use quote::format_ident;
-use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct, Meta};
+use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct, Meta, MacroDelimiter};
 
 use crate::{
     covariance_detection::type_is_covariant_over_this_lifetime,
@@ -116,23 +116,19 @@ fn parse_derive_token(token: &TokenTree) -> Result<Option<Derive>, Error> {
 
 fn parse_derive_attribute(attr: &Attribute) -> Result<Vec<Derive>, Error> {
     let body = match &attr.meta {
-        Meta::List(ml) => &ml.tokens,
+        Meta::List(ml) => ml,
         _ => unreachable!(),
     };
-    if let Some(TokenTree::Group(body)) = body.clone().into_iter().next() {
-        if body.delimiter() != Delimiter::Parenthesis {
-            panic!("TODO: nice error, bad define syntax")
-        }
-        let mut derives = Vec::new();
-        for token in body.stream().into_iter() {
-            if let Some(derive) = parse_derive_token(&token)? {
-                derives.push(derive);
-            }
-        }
-        Ok(derives)
-    } else {
-        Err(Error::new(attr.span(), "bad syntax"))
+    if !matches!(body.delimiter, MacroDelimiter::Paren(_)){
+        return Err(Error::new(attr.span(), format!("malformed derive input, derive attributes are of the form `#[derive({})]`",body.tokens.to_string())));
     }
+    let mut derives = Vec::new();
+    for token in body.tokens.clone().into_iter() {
+        if let Some(derive) = parse_derive_token(&token)? {
+            derives.push(derive);
+        }
+    }
+    Ok(derives)
 }
 
 pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
