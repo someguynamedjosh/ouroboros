@@ -16,7 +16,6 @@ pub fn make_with_all_function(
     let mut field_assignments = Vec::new();
     let mut mut_fields = Vec::new();
     let mut mut_field_assignments = Vec::new();
-    let internal_struct = &info.internal_ident;
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
     for field in info.fields.iter().rev() {
         let field_name = &field.name;
@@ -75,9 +74,13 @@ pub fn make_with_all_function(
         clause
             .predicates
             .push(extra.predicates.first().unwrap().clone());
+        let extra: WhereClause = syn::parse_quote! { where 'this: 'outer_borrow };
+        clause
+            .predicates
+            .push(extra.predicates.first().unwrap().clone());
         clause
     } else {
-        syn::parse_quote! { where #lifetime: 'this }
+        syn::parse_quote! { where #lifetime: 'this, 'this: 'outer_borrow }
     };
     let struct_defs = quote! {
         #[doc=#struct_documentation]
