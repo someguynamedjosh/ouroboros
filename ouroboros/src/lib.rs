@@ -365,6 +365,7 @@ pub mod macro_help {
     }
 
     std_type_check!(is_std_box_type T alloc::boxed::Box<T>);
+    #[cfg(target_has_atomic = "ptr")]
     std_type_check!(is_std_arc_type T alloc::sync::Arc<T>);
     std_type_check!(is_std_rc_type T alloc::rc::Rc<T>);
 
