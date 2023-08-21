@@ -10,7 +10,7 @@ Dual licensed under MIT / Apache 2.0.
 While this crate is `no_std` compatible, it still requires the `alloc` crate.
 
 Version notes:
-- Verison `0.17.0` reintroduces type parameter support, but requires at least
+- Version `0.17.0` reintroduces type parameter support, but requires at least
   version 1.60 of the Rust toolchain.
 - Version `0.16.0` fixes a potential soundness issue but removes template
   parameter support.
