@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        RUST: ["1.60", stable, beta, nightly]
+        RUST: ["1.63", stable, beta, nightly]
     steps:
       - uses: actions/checkout@v2
       - name: Set Rust version
