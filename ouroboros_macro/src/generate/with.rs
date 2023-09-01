@@ -14,8 +14,6 @@ pub fn make_with_all_function(
     };
     let mut fields = Vec::new();
     let mut field_assignments = Vec::new();
-    let mut mut_fields = Vec::new();
-    let mut mut_field_assignments = Vec::new();
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
     for field in info.fields.iter().rev() {
         let field_name = &field.name;
@@ -23,8 +21,6 @@ pub fn make_with_all_function(
         if field.field_type == FieldType::Tail {
             fields.push(quote! { #visibility #field_name: &'outer_borrow #field_type });
             field_assignments.push(quote! { #field_name: &this.#field_name });
-            mut_fields.push(quote! { #visibility #field_name: &'outer_borrow mut #field_type });
-            mut_field_assignments.push(quote! { #field_name: &mut this.#field_name });
         } else if field.field_type == FieldType::Borrowed {
             let ass = quote! { #field_name: unsafe {
                 ::ouroboros::macro_help::change_lifetime(
@@ -33,8 +29,6 @@ pub fn make_with_all_function(
             } };
             fields.push(quote! { #visibility #field_name: &'this #field_type });
             field_assignments.push(ass.clone());
-            mut_fields.push(quote! { #visibility #field_name: &'this #field_type });
-            mut_field_assignments.push(ass);
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
             // borrowed.
@@ -43,9 +37,7 @@ pub fn make_with_all_function(
 
     for (ty, ident) in info.generic_consumers() {
         fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
-        mut_fields.push(quote! { #ident: ::core::marker::PhantomData<#ty> });
         field_assignments.push(quote! { #ident: ::core::marker::PhantomData });
-        mut_field_assignments.push(quote! { #ident: ::core::marker::PhantomData });
     }
     let new_generic_params = info.borrowed_generic_params();
     let new_generic_args = info.borrowed_generic_arguments();
@@ -54,14 +46,6 @@ pub fn make_with_all_function(
         concat!(
             "A struct for holding immutable references to all ",
             "[tail and immutably borrowed fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions) in an instance of ",
-            "[`{0}`]({0})."
-        ),
-        info.ident.to_string()
-    );
-    let mut_struct_documentation = format!(
-        concat!(
-            "A struct for holding mutable references to all ",
-            "[tail fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions) in an instance of ",
             "[`{0}`]({0})."
         ),
         info.ident.to_string()
@@ -85,29 +69,15 @@ pub fn make_with_all_function(
     let struct_defs = quote! {
         #[doc=#struct_documentation]
         #visibility struct BorrowedFields #new_generic_params #generic_where { #(#fields),* }
-        #[doc=#mut_struct_documentation]
-        #visibility struct BorrowedMutFields #new_generic_params #generic_where { #(#mut_fields),* }
     };
     let borrowed_fields_type = quote! { BorrowedFields<#(#new_generic_args),*> };
-    let borrowed_mut_fields_type = quote! { BorrowedMutFields<#(#new_generic_args),*> };
     let documentation = concat!(
         "This method provides immutable references to all ",
         "[tail and immutably borrowed fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions).",
     );
-    let mut_documentation = concat!(
-        "This method provides mutable references to all ",
-        "[tail fields](https://docs.rs/ouroboros/latest/ouroboros/attr.self_referencing.html#definitions).",
-    );
     let documentation = if !options.do_no_doc {
         quote! {
             #[doc=#documentation]
-        }
-    } else {
-        quote! { #[doc(hidden)] }
-    };
-    let mut_documentation = if !options.do_no_doc {
-        quote! {
-            #[doc=#mut_documentation]
         }
     } else {
         quote! { #[doc(hidden)] }
@@ -122,17 +92,6 @@ pub fn make_with_all_function(
             let this = unsafe { self.actual_data.assume_init_ref() };
             user(BorrowedFields {
                 #(#field_assignments),*
-            })
-        }
-        #mut_documentation
-        #[inline(always)]
-        #visibility fn with_mut <'outer_borrow, ReturnType>(
-            &'outer_borrow mut self,
-            user: impl for<'this> ::core::ops::FnOnce(#borrowed_mut_fields_type) -> ReturnType
-        ) -> ReturnType {
-            let this = unsafe { self.actual_data.assume_init_mut() };
-            user(BorrowedMutFields {
-                #(#mut_field_assignments),*
             })
         }
     };

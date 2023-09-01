@@ -1,6 +1,8 @@
-use proc_macro2::{Delimiter, Span, TokenTree};
+use proc_macro2::{Span, TokenTree};
 use quote::format_ident;
-use syn::{spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct, Meta, MacroDelimiter};
+use syn::{
+    spanned::Spanned, Attribute, Error, Fields, GenericParam, ItemStruct, MacroDelimiter, Meta,
+};
 
 use crate::{
     covariance_detection::type_is_covariant_over_this_lifetime,
@@ -119,8 +121,14 @@ fn parse_derive_attribute(attr: &Attribute) -> Result<Vec<Derive>, Error> {
         Meta::List(ml) => ml,
         _ => unreachable!(),
     };
-    if !matches!(body.delimiter, MacroDelimiter::Paren(_)){
-        return Err(Error::new(attr.span(), format!("malformed derive input, derive attributes are of the form `#[derive({})]`",body.tokens.to_string())));
+    if !matches!(body.delimiter, MacroDelimiter::Paren(_)) {
+        return Err(Error::new(
+            attr.span(),
+            format!(
+                "malformed derive input, derive attributes are of the form `#[derive({})]`",
+                body.tokens.to_string()
+            ),
+        ));
     }
     let mut derives = Vec::new();
     for token in body.tokens.clone().into_iter() {

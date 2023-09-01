@@ -12,12 +12,14 @@ use crate::{
         into_heads::make_into_heads, struc::create_internal_struct_def,
         summon_checker::generate_checker_summoner,
         try_constructor::create_try_builder_and_constructor, type_asserts::make_type_asserts,
-        with_all::make_with_all_function, with_each::make_with_functions,
+        with::make_with_all_function, with_each::make_with_functions,
     },
     info_structures::Options,
     parse::parse_struct,
 };
-use generate::{drop::create_drop_impl, struc::create_actual_struct_def};
+use generate::{
+    drop::create_drop_impl, struc::create_actual_struct_def, with_mut::make_with_all_mut_function,
+};
 use heck::ToSnakeCase;
 use info_structures::BuilderType;
 use proc_macro::TokenStream;
@@ -25,7 +27,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2::TokenTree;
 use proc_macro_error::proc_macro_error;
 use quote::{format_ident, quote};
-use syn::{parse_quote, punctuated::Punctuated, token::Where, Error, ItemStruct, WhereClause};
+use syn::{Error, ItemStruct};
 
 fn self_referencing_impl(
     original_struct_def: &ItemStruct,
@@ -60,7 +62,9 @@ fn self_referencing_impl(
     ) = create_try_builder_and_constructor(&info, options, BuilderType::AsyncSend)?;
 
     let with_defs = make_with_functions(&info, options)?;
-    let (with_all_struct_defs, with_all_fn_defs) = make_with_all_function(&info, options)?;
+    let (with_all_struct_def, with_all_fn_def) = make_with_all_function(&info, options)?;
+    let (with_all_mut_struct_def, with_all_mut_fn_def) =
+        make_with_all_mut_function(&info, options)?;
     let (heads_struct_def, into_heads_fn) = make_into_heads(&info, options);
 
     let impls = create_derives(&info)?;
@@ -93,7 +97,8 @@ fn self_referencing_impl(
             #try_builder_def
             #async_try_builder_def
             #async_send_try_builder_def
-            #with_all_struct_defs
+            #with_all_struct_def
+            #with_all_mut_struct_def
             #heads_struct_def
             #impls
             impl <#generic_params> #struct_name <#(#generic_args),*> #generic_where {
@@ -104,7 +109,8 @@ fn self_referencing_impl(
                 #async_try_constructor_def
                 #async_send_try_constructor_def
                 #(#with_defs)*
-                #with_all_fn_defs
+                #with_all_fn_def
+                #with_all_mut_fn_def
                 #into_heads_fn
             }
             #type_asserts_def
