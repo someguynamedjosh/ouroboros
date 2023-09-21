@@ -5,8 +5,6 @@ use syn::Error;
 
 pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<TokenStream>, Error> {
     let mut users = Vec::new();
-    let internal_struct = &info.internal_ident;
-    let generic_args = info.generic_arguments();
     for field in &info.fields {
         let visibility = &field.vis;
         let field_name = &field.name;

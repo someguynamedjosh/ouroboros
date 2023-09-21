@@ -3,7 +3,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     punctuated::Punctuated, token::Comma, Attribute, ConstParam, Error, GenericParam, Generics,
-    LifetimeParam, Type, TypeParam, Visibility, WhereClause,
+    LifetimeParam, Type, TypeParam, Visibility, 
 };
 
 #[derive(Clone, Copy)]
@@ -90,20 +90,6 @@ impl StructInfo {
         &self.generics.params
     }
 
-    pub fn generic_params_without_lifetimes(&self) -> Vec<&GenericParam> {
-        self.generics
-            .params
-            .iter()
-            .filter(|p| {
-                if let GenericParam::Lifetime(..) = p {
-                    false
-                } else {
-                    true
-                }
-            })
-            .collect()
-    }
-
     /// Same as generic_params but with 'this and 'outer_borrow prepended.
     pub fn borrowed_generic_params(&self) -> TokenStream {
         if self.generic_params().is_empty() {
@@ -130,14 +116,6 @@ impl StructInfo {
 
     pub fn generic_arguments(&self) -> Vec<TokenStream> {
         make_generic_arguments(self.generics.params.iter().collect())
-    }
-
-    pub fn generic_arguments_with_static_lifetimes(&self) -> Vec<TokenStream> {
-        let mut result = make_generic_arguments(self.generic_params_without_lifetimes());
-        for _ in 0..self.generics.lifetimes().count() {
-            result.insert(0, quote! { 'static });
-        }
-        result
     }
 
     /// Same as generic_arguments but with 'outer_borrow and 'this prepended.

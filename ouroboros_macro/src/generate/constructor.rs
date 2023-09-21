@@ -13,7 +13,6 @@ pub fn create_builder_and_constructor(
 ) -> Result<(Ident, TokenStream, TokenStream), Error> {
     let struct_name = info.ident.clone();
     let generic_args = info.generic_arguments();
-    let generic_args_with_static_lifetimes = info.generic_arguments_with_static_lifetimes();
 
     let vis = if options.do_pub_extras {
         info.vis.clone()
