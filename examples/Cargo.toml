@@ -1,6 +1,6 @@
 [package]
 name = "ouroboros_examples"
-version = "0.18.0"
+version = "0.18.1"
 authors = ["Joshua Maros <joshua-maros@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -20,10 +20,10 @@ miri = []
 std = []
 
 [dependencies]
-ouroboros = { version = "0.18.0", path = "../ouroboros" }
+ouroboros = { version = "0.18.1", path = "../ouroboros" }
 tokio = { version = "1.27.0", features = [ "macros", "rt" ], optional = true }
 
 [dev-dependencies]
 rustversion = "1.0.11"
-trybuild = "=1.0.50"
+trybuild = "=1.0.85"
 tokio = { version = "1.25.0", features = [ "macros", "rt" ] }
