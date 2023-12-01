@@ -145,7 +145,7 @@ pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
                 "pub_extras" => options.do_pub_extras = true,
                 _ => {
                     return Error::new_spanned(
-                        &ident,
+                        ident,
                         "Unknown identifier, expected 'no_doc' or 'pub_extras'.",
                     )
                     .to_compile_error()

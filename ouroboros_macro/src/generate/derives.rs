@@ -5,10 +5,11 @@ use syn::{Error, GenericParam, TypeParamBound};
 
 fn add_trait_bound(param: &GenericParam, bound: &TypeParamBound) -> GenericParam {
     let mut new = param.clone();
-    match &mut new {
-        GenericParam::Type(t) => t.bounds.push(bound.clone()),
-        _ => (),
+
+    if let GenericParam::Type(t) = &mut new {
+        t.bounds.push(bound.clone())
     }
+
     new
 }
 

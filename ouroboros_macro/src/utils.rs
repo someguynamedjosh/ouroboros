@@ -107,7 +107,6 @@ pub fn submodule_contents_visibility(original_visibility: &Visibility) -> Visibi
                 new_visibility.in_token = Some(
                     restricted
                         .in_token
-                        .clone()
                         .unwrap_or_else(|| syn::parse_quote! { in }),
                 );
                 new_visibility.path.segments = std::iter::once(syn::parse_quote! { super })

@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, borrow::ToOwned};
+use alloc::{borrow::ToOwned, boxed::Box};
 use core::fmt::Debug;
 
 use ouroboros::self_referencing;
@@ -102,7 +102,6 @@ fn box_and_ref() {
 #[cfg(all(not(feature = "miri"), feature = "std"))]
 #[tokio::test]
 async fn async_new() {
-    use std::future::Future;
     let bar = BoxAndRefAsyncBuilder {
         data: 12,
         dref_builder: |data| Box::pin(async move { data }),

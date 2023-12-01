@@ -60,10 +60,7 @@ pub enum BuilderType {
 
 impl BuilderType {
     pub fn is_async(&self) -> bool {
-        match self {
-            BuilderType::Sync => false,
-            _ => true,
-        }
+        !matches!(self, BuilderType::Sync)
     }
 }
 
@@ -83,7 +80,7 @@ impl StructInfo {
     // The lifetime to use in place of 'this for internal implementations,
     // should never be exposed to the user.
     pub fn fake_lifetime(&self) -> Ident {
-        return self.first_lifetime.clone();
+        self.first_lifetime.clone()
     }
 
     pub fn generic_params(&self) -> &Punctuated<GenericParam, Comma> {

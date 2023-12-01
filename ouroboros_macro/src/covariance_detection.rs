@@ -13,11 +13,7 @@ pub fn apparent_std_container_type(raw_type: &Type) -> Option<(&'static str, &Ty
     } else {
         return None;
     };
-    let segment = if let Some(segment) = tpath.path.segments.last() {
-        segment
-    } else {
-        return None;
-    };
+    let segment = tpath.path.segments.last()?;
     let args = if let PathArguments::AngleBracketed(args) = &segment.arguments {
         args
     } else {
@@ -49,7 +45,7 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
         return Some(true);
     }
     match ty {
-        Array(arr) => type_is_covariant_over_this_lifetime(&*arr.elem),
+        Array(arr) => type_is_covariant_over_this_lifetime(&arr.elem),
         BareFn(f) => {
             debug_assert!(uses_this_lifetime(f.to_token_stream()));
             None
@@ -80,13 +76,11 @@ pub fn type_is_covariant_over_this_lifetime(ty: &syn::Type) -> Option<bool> {
                                 if !type_is_covariant_over_this_lifetime(ty)? {
                                     return Some(false);
                                 }
-                            } else {
-                                if uses_this_lifetime(ty.to_token_stream()) {
-                                    return None;
-                                }
+                            } else if uses_this_lifetime(ty.to_token_stream()) {
+                                return None;
                             }
                         } else if let syn::GenericArgument::Lifetime(lt) = arg {
-                            if lt.ident.to_string() == "this" && !all_parameters_are_covariant {
+                            if lt.ident == "this" && !all_parameters_are_covariant {
                                 return None;
                             }
                         }
