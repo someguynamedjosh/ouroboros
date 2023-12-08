@@ -24,7 +24,7 @@ pub fn make_with_all_mut_function(
         let field_name = &field.name;
         let field_type = &field.typ;
         let lifetime = format_ident!("this{}", lifetime_idents.len());
-        if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed  {
+        if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed {
             lifetime_idents.push(lifetime.clone());
         }
         let field_type = replace_this_with_lifetime(quote! { #field_type }, lifetime.clone());

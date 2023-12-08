@@ -9,8 +9,8 @@ mod utils;
 use crate::{
     generate::{
         constructor::create_builder_and_constructor, derives::create_derives,
-        into_heads::make_into_heads, struc::create_internal_struct_def,
-        summon_checker::generate_checker_summoner,
+        into_heads::destruct_into_heads, into_heads::make_into_heads,
+        struc::create_internal_struct_def, summon_checker::generate_checker_summoner,
         try_constructor::create_try_builder_and_constructor, type_asserts::make_type_asserts,
         with::make_with_all_function, with_each::make_with_functions,
     },
@@ -66,6 +66,7 @@ fn self_referencing_impl(
     let (with_all_mut_struct_def, with_all_mut_fn_def) =
         make_with_all_mut_function(&info, options)?;
     let (heads_struct_def, into_heads_fn) = make_into_heads(&info, options);
+    let (destruct_heads_struct_def, destruct_into_heads_fn) = destruct_into_heads(&info, options)?;
 
     let impls = create_derives(&info)?;
 
@@ -100,6 +101,7 @@ fn self_referencing_impl(
             #with_all_struct_def
             #with_all_mut_struct_def
             #heads_struct_def
+            #destruct_heads_struct_def
             #impls
             impl <#generic_params> #struct_name <#(#generic_args),*> #generic_where {
                 #constructor_def
@@ -112,6 +114,7 @@ fn self_referencing_impl(
                 #with_all_fn_def
                 #with_all_mut_fn_def
                 #into_heads_fn
+                #destruct_into_heads_fn
             }
             #type_asserts_def
         }

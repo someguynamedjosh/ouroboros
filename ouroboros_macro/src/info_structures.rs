@@ -3,7 +3,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     punctuated::Punctuated, token::Comma, Attribute, ConstParam, Error, GenericParam, Generics,
-    LifetimeParam, Type, TypeParam, Visibility, 
+    LifetimeParam, Type, TypeParam, Visibility,
 };
 
 #[derive(Clone, Copy)]
