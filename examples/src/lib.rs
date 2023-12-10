@@ -8,7 +8,7 @@ use ouroboros::self_referencing;
 #[cfg(test)]
 mod ok_tests;
 
-pub struct Ext<'this, T, const REV: bool>(&'this Vec<T>);
+pub struct Ext<'this, T, const REV: bool>(&'this Box<T>);
 
 #[self_referencing(pub_extras)]
 pub struct WithConstParam<T: 'static, const REV: bool> {
