@@ -8,12 +8,14 @@ use ouroboros::self_referencing;
 #[cfg(test)]
 mod ok_tests;
 
+pub struct Ext<'this, T, const REV: bool>(&'this Vec<T>);
+
 #[self_referencing(pub_extras)]
-pub struct WithConstParam<const REV: bool, const RREV: bool> {
-    data: Box<Vec<u64>>,
+pub struct WithConstParam<T: 'static, const REV: bool> {
+    data: core::cell::RefCell<T>,
     #[borrows(data)]
     #[not_covariant]
-    dref: Option<&'this Box<Vec<u64>>>,
+    dref: Option<Box<Ext<'this, T, REV>>>,
 }
 
 #[self_referencing]
