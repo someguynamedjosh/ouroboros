@@ -9,27 +9,36 @@ pub fn make_generic_consumers(generics: &Generics) -> impl Iterator<Item = (Toke
         .params
         .clone()
         .into_iter()
-        .filter_map(|param| match param {
+        .map(|param| match param {
             GenericParam::Type(ty) => {
                 let ident = &ty.ident;
-                Some((
+                (
                     quote! { #ident },
                     format_ident!(
                         "_consume_template_type_{}",
                         ident.to_string().to_snake_case()
                     ),
-                ))
+                )
             }
             GenericParam::Lifetime(lt) => {
                 let lifetime = &lt.lifetime;
                 let ident = &lifetime.ident;
-                Some((
+                (
                     quote! { &#lifetime () },
                     format_ident!("_consume_template_lifetime_{}", ident),
-                ))
+                )
             }
             // rustc don't require constants to consume, so we just skip it. 
-            GenericParam::Const(..) => None,
+            GenericParam::Const(ct) => {
+                let ident = ct.ident;
+                (
+                    quote! { () },
+                    format_ident!(
+                        "_comsume_template_const_parameter_{}",
+                        ident.to_string().to_snake_case()
+                    ),
+                )
+            },
         })
 }
 
@@ -48,8 +57,7 @@ pub fn make_generic_arguments(generics: Vec<&GenericParam>) -> Vec<TokenStream> 
             }
             GenericParam::Const(ct) => {
                 let ident = &ct.ident;
-                let typ = &ct.ty;
-                arguments.push(quote! { const #ident: #typ });
+                arguments.push(quote! { #ident });
             },
         }
     }

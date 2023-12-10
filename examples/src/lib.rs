@@ -8,6 +8,14 @@ use ouroboros::self_referencing;
 #[cfg(test)]
 mod ok_tests;
 
+#[self_referencing(pub_extras)]
+pub struct WithConstParam<const REV: bool, const RREV: bool> {
+    data: Box<Vec<u64>>,
+    #[borrows(data)]
+    #[not_covariant]
+    dref: Option<&'this Box<Vec<u64>>>,
+}
+
 #[self_referencing]
 /// A simple struct which contains an `i32` and a `&'this i32`.
 pub struct DataAndRef {
