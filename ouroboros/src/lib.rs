@@ -351,8 +351,8 @@ pub mod macro_help {
     pub extern crate alloc;
 
     pub use aliasable::boxed::AliasableBox;
-    pub use static_assertions::assert_impl_all;
     use aliasable::boxed::UniqueBox;
+    pub use static_assertions::assert_impl_all;
 
     pub struct CheckIfTypeIsStd<T>(core::marker::PhantomData<T>);
 

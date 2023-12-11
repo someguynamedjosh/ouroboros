@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, borrow::ToOwned};
+use alloc::{borrow::ToOwned, boxed::Box};
 use core::fmt::Debug;
 
 use ouroboros::self_referencing;
@@ -270,6 +270,39 @@ fn double_lifetime() {
         external2: &'b str,
         #[borrows(external, external2)]
         internal: &'this &'b str,
+    }
+}
+
+mod destruct_tests {
+    use ouroboros::self_referencing;
+
+    struct Wrapper<'a> {
+        int: &'a i32,
+    }
+
+    impl<'a> Wrapper<'a> {
+        fn into_int(self) -> &'a i32 {
+            self.int
+        }
+    }
+
+    #[self_referencing]
+    struct DestructIntoHeads {
+        data: i32,
+        #[borrows(data)]
+        #[covariant]
+        dref: Wrapper<'this>,
+    }
+
+    #[test]
+    fn destruct_into_heads() {
+        let s = DestructIntoHeads::new(1, |int| Wrapper { int });
+
+        let (_, heads) = s.destruct_into_heads(|tails| {
+            assert_eq!(*tails.dref.into_int(), 1);
+        });
+
+        assert_eq!(heads.data, 1);
     }
 }
 
