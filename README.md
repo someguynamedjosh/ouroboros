@@ -11,7 +11,7 @@ While this crate is `no_std` compatible, it still requires the `alloc` crate.
 
 Version notes:
 - Version `0.18.0` now correctly refuses to compile unsound usages of `with_mut`, but requires Rust 1.63 or later.
-- Verison `0.17.0` reintroduces type parameter support, but requires at least
+- Version `0.17.0` reintroduces type parameter support, but requires at least
   version 1.60 of the Rust toolchain.
 - Version `0.16.0` fixes a potential soundness issue but removes template
   parameter support.
