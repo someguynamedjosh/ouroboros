@@ -1,9 +1,10 @@
 use crate::utils::{make_generic_arguments, make_generic_consumers, replace_this_with_lifetime};
 use proc_macro2::{Ident, TokenStream};
+use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     punctuated::Punctuated, token::Comma, Attribute, ConstParam, Error, GenericParam, Generics,
-    LifetimeParam, Type, TypeParam, Visibility, 
+    LifetimeParam, Type, TypeParam, Visibility, spanned::Spanned, 
 };
 
 #[derive(Clone, Copy)]
@@ -213,7 +214,8 @@ impl StructFieldInfo {
 
     /// Generates an error requesting that the user explicitly specify whether or not the
     /// field's type is covariant.
-    pub fn covariance_error(&self) {
+    #[must_use]
+    pub fn covariance_error(&self) -> Diagnostic {
         let error = concat!(
             "Ouroboros cannot automatically determine if this type is covariant.\n\n",
             "As an example, a Box<&'this ()> is covariant because it can be used as a\n",
@@ -224,7 +226,7 @@ impl StructFieldInfo {
             "guarantee means the value is not covariant.\n\n",
             "To resolve this error, add #[covariant] or #[not_covariant] to the field.\n",
         );
-        proc_macro_error::emit_error!(self.typ, error);
+        self.typ.span().error(error)
     }
 
     pub fn make_constructor_arg_type_impl(
