@@ -1,13 +1,13 @@
 [package]
 name = "ouroboros"
 version = "0.18.2"
-authors = ["Joshua Maros <joshua-maros@github.com>"]
+authors = ["Josh <someguynamedjosh@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 description = "Easy, safe self-referential struct generation."
 readme = "../README.md"
 documentation = "https://docs.rs/ouroboros"
-repository = "https://github.com/joshua-maros/ouroboros"
+repository = "https://github.com/someguynamedjosh/ouroboros"
 
 [dependencies]
 aliasable = "0.1.3"

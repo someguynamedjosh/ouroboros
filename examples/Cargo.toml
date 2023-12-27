@@ -1,12 +1,12 @@
 [package]
 name = "ouroboros_examples"
 version = "0.18.2"
-authors = ["Joshua Maros <joshua-maros@github.com>"]
+authors = ["Josh <someguynamedjosh@github.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 description = "Examples for the ouroboros crate."
 documentation = "https://docs.rs/ouroboros_examples"
-repository = "https://github.com/joshua-maros/ouroboros"
+repository = "https://github.com/someguynamedjosh/ouroboros"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--document-private-items"]
