@@ -104,7 +104,7 @@ pub fn create_try_builder_and_constructor(
             builder_struct_field_names.push(quote! { #field_name });
             doc_table += &format!(
                 "| `{}` | Directly pass in the value this field should contain |\n",
-                field_name.to_string()
+                field_name
             );
             if !field.self_referencing {
                 if field.is_borrowed() {
@@ -127,7 +127,7 @@ pub fn create_try_builder_and_constructor(
             {}
             doc_table += &format!(
                 "| `{}` | Use a function or closure: `(",
-                builder_name.to_string()
+                builder_name
             );
             let mut builder_args = Vec::new();
             for (index, borrow) in field.borrows.iter().enumerate() {
@@ -135,14 +135,14 @@ pub fn create_try_builder_and_constructor(
                 builder_args.push(format_ident!("{}_illegal_static_reference", borrowed_name));
                 doc_table += &format!(
                     "{}: &{}_",
-                    borrowed_name.to_string(),
+                    borrowed_name,
                     if borrow.mutable { "mut " } else { "" },
                 );
                 if index < field.borrows.len() - 1 {
                     doc_table += ", ";
                 }
             }
-            doc_table += &format!(") -> Result<{}: _, Error_>` | \n", field_name.to_string());
+            doc_table += &format!(") -> Result<{}: _, Error_>` | \n", field_name);
             let builder_value = if builder_type.is_async() {
                 quote! { #builder_name (#(#builder_args),*).await }
             } else {

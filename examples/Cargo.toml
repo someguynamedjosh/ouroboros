@@ -25,5 +25,5 @@ tokio = { version = "1.27.0", features = [ "macros", "rt" ], optional = true }
 
 [dev-dependencies]
 rustversion = "1.0.11"
-trybuild = "=1.0.50"
+trybuild = "=1.0.85"
 tokio = { version = "1.25.0", features = [ "macros", "rt" ] }

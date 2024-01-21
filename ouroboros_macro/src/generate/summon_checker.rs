@@ -12,7 +12,7 @@ pub fn generate_checker_summoner(info: &StructInfo) -> Result<TokenStream, Error
     for field in &info.fields {
         let field_name = &field.name;
 
-        let arg_type = field.make_constructor_arg_type(&info, BuilderType::Sync)?;
+        let arg_type = field.make_constructor_arg_type(info, BuilderType::Sync)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });

@@ -37,7 +37,7 @@ pub fn make_with_all_mut_function(
                     &*this.#field_name
                 )
             } };
-            let lt = Lifetime::new(&format!("'{}", lifetime.to_string()), Span::call_site());
+            let lt = Lifetime::new(&format!("'{}", lifetime), Span::call_site());
             mut_fields.push(quote! { #visibility #field_name: &#lt #field_type });
             mut_field_assignments.push(ass);
         } else if field.field_type == FieldType::BorrowedMut {
@@ -53,14 +53,14 @@ pub fn make_with_all_mut_function(
 
     let mut new_generic_params = info.generic_params().clone();
     for lt in &lifetime_idents {
-        let lt = Lifetime::new(&format!("'{}", lt.to_string()), Span::call_site());
+        let lt = Lifetime::new(&format!("'{}", lt), Span::call_site());
         new_generic_params.insert(0, syn::parse_quote! { #lt });
     }
     new_generic_params.insert(0, syn::parse_quote! { 'outer_borrow });
     let mut new_generic_args = info.generic_arguments();
     let mut lifetimes = Vec::new();
     for lt in &lifetime_idents {
-        let lt = Lifetime::new(&format!("'{}", lt.to_string()), Span::call_site());
+        let lt = Lifetime::new(&format!("'{}", lt), Span::call_site());
         lifetimes.push(lt.clone());
         new_generic_args.insert(0, quote! { #lt });
     }
@@ -81,15 +81,15 @@ pub fn make_with_all_mut_function(
         syn::parse_quote! { where }
     };
     for lt in &lifetime_idents {
-        let lt = Lifetime::new(&format!("'{}", lt.to_string()), Span::call_site());
+        let lt = Lifetime::new(&format!("'{}", lt), Span::call_site());
         let extra: WhereClause = syn::parse_quote! { where #fake_lifetime: #lt };
         generic_where
             .predicates
             .extend(extra.predicates.into_iter());
     }
     for (outlives, lt) in lifetime_idents.iter().tuple_windows() {
-        let lt = Lifetime::new(&format!("'{}", lt.to_string()), Span::call_site());
-        let outlives = Lifetime::new(&format!("'{}", outlives.to_string()), Span::call_site());
+        let lt = Lifetime::new(&format!("'{}", lt), Span::call_site());
+        let outlives = Lifetime::new(&format!("'{}", outlives), Span::call_site());
         let extra: WhereClause = syn::parse_quote! { where #lt: #outlives };
         generic_where
             .predicates

@@ -126,7 +126,7 @@ fn parse_derive_attribute(attr: &Attribute) -> Result<Vec<Derive>, Error> {
             attr.span(),
             format!(
                 "malformed derive input, derive attributes are of the form `#[derive({})]`",
-                body.tokens.to_string()
+                body.tokens
             ),
         ));
     }
@@ -226,7 +226,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
     if !has_non_tail {
         return Err(Error::new(
             Span::call_site(),
-            &format!(
+            format!(
                 concat!(
                     "Self-referencing struct cannot be made entirely of tail fields, try adding ",
                     "#[borrows({0})] to a field defined after {0}."
@@ -244,18 +244,15 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
     let mut derives = Vec::new();
     for attr in &def.attrs {
         let p = &attr.path().segments;
-        if p.len() == 0 {
-            return Err(Error::new(p.span(), &format!("Unsupported attribute")));
+        if p.is_empty() {
+            return Err(Error::new(p.span(), "Unsupported attribute".to_string()));
         }
         let name = p[0].ident.to_string();
-        let good = match &name[..] {
-            "clippy" | "allow" | "deny" | "doc" => true,
-            _ => false,
-        };
+        let good = matches!(&name[..], "clippy" | "allow" | "deny" | "doc");
         if good {
             attributes.push(attr.clone())
         } else if name == "derive" {
-            if derives.len() > 0 {
+            if !derives.is_empty() {
                 return Err(Error::new(
                     attr.span(),
                     "Multiple derive attributes not allowed",
@@ -264,11 +261,11 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
                 derives = parse_derive_attribute(attr)?;
             }
         } else {
-            return Err(Error::new(p.span(), &format!("Unsupported attribute")));
+            return Err(Error::new(p.span(), "Unsupported attribute".to_string()));
         }
     }
 
-    return Ok(StructInfo {
+    Ok(StructInfo {
         derives,
         ident: def.ident.clone(),
         internal_ident: format_ident!("{}Internal", def.ident),
@@ -277,5 +274,5 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
         vis,
         first_lifetime,
         attributes,
-    });
+    })
 }

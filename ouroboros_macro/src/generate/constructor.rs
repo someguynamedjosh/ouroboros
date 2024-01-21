@@ -67,7 +67,7 @@ pub fn create_builder_and_constructor(
     for field in &info.fields {
         let field_name = &field.name;
 
-        let arg_type = field.make_constructor_arg_type(&info, builder_type)?;
+        let arg_type = field.make_constructor_arg_type(info, builder_type)?;
         if let ArgType::Plain(plain_type) = arg_type {
             // No fancy builder function, we can just move the value directly into the struct.
             params.push(quote! { #field_name: #plain_type });
@@ -75,7 +75,7 @@ pub fn create_builder_and_constructor(
             builder_struct_field_names.push(quote! { #field_name });
             doc_table += &format!(
                 "| `{}` | Directly pass in the value this field should contain |\n",
-                field_name.to_string()
+                field_name
             );
         } else if let ArgType::TraitBound(bound_type) = arg_type {
             // Trait bounds are much trickier. We need a special syntax to accept them in the
@@ -85,7 +85,7 @@ pub fn create_builder_and_constructor(
             params.push(quote! { #builder_name : impl #bound_type });
             doc_table += &format!(
                 "| `{}` | Use a function or closure: `(",
-                builder_name.to_string()
+                builder_name
             );
             let mut builder_args = Vec::new();
             for (index, borrow) in field.borrows.iter().enumerate() {
@@ -93,14 +93,14 @@ pub fn create_builder_and_constructor(
                 builder_args.push(format_ident!("{}_illegal_static_reference", borrowed_name));
                 doc_table += &format!(
                     "{}: &{}_",
-                    borrowed_name.to_string(),
+                    borrowed_name,
                     if borrow.mutable { "mut " } else { "" },
                 );
                 if index < field.borrows.len() - 1 {
                     doc_table += ", ";
                 }
             }
-            doc_table += &format!(") -> {}: _` | \n", field_name.to_string());
+            doc_table += &format!(") -> {}: _` | \n", field_name);
             if builder_type.is_async() {
                 code.push(quote! { let #field_name = #builder_name (#(#builder_args),*).await; });
             } else {
