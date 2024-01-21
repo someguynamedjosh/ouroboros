@@ -22,10 +22,10 @@ use generate::{
 };
 use heck::ToSnakeCase;
 use info_structures::BuilderType;
+use itertools::Itertools;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2::TokenTree;
-use proc_macro_error::proc_macro_error;
 use quote::{format_ident, quote};
 use syn::{Error, ItemStruct};
 
@@ -61,7 +61,11 @@ fn self_referencing_impl(
         async_send_try_constructor_def,
     ) = create_try_builder_and_constructor(&info, options, BuilderType::AsyncSend)?;
 
-    let with_defs = make_with_functions(&info, options)?;
+    let (with_defs, with_errors) = make_with_functions(&info, options);
+    let with_errors = with_errors
+        .into_iter()
+        .map(|err| err.emit_as_expr_tokens())
+        .collect_vec();
     let (with_all_struct_def, with_all_fn_def) = make_with_all_function(&info, options)?;
     let (with_all_mut_struct_def, with_all_mut_fn_def) =
         make_with_all_mut_function(&info, options)?;
@@ -99,6 +103,7 @@ fn self_referencing_impl(
             #async_send_try_builder_def
             #with_all_struct_def
             #with_all_mut_struct_def
+            #(#with_errors)*
             #heads_struct_def
             #impls
             impl <#generic_params> #struct_name <#(#generic_args),*> #generic_where {
@@ -125,7 +130,6 @@ fn self_referencing_impl(
     }))
 }
 
-#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn self_referencing(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut options = Options {

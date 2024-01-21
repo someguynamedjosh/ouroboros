@@ -1,10 +1,17 @@
 use crate::info_structures::{FieldType, Options, StructInfo};
 use proc_macro2::TokenStream;
+use proc_macro2_diagnostics::Diagnostic;
 use quote::{format_ident, quote};
 use syn::Error;
 
-pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<TokenStream>, Error> {
+pub enum ProcessingError {
+    Syntax(Error),
+    Covariance(Vec<Diagnostic>),
+}
+
+pub fn make_with_functions(info: &StructInfo, options: Options) -> (Vec<TokenStream>, Vec<Diagnostic>) {
     let mut users = Vec::new();
+    let mut errors = Vec::new();
     for field in &info.fields {
         let visibility = &field.vis;
         let field_name = &field.name;
@@ -50,7 +57,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                     }
                 });
             } else if field.covariant.is_none() {
-                field.covariance_error();
+                errors.push(field.covariance_error());
             }
             // If it is not borrowed at all it's safe to allow mutably borrowing it.
             let user_name = format_ident!("with_{}_mut", &field.name);
@@ -113,7 +120,7 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
                     // Skip the other functions, they will cause compiler errors.
                     continue;
                 } else if field.covariant.is_none() {
-                    field.covariance_error();
+                    errors.push(field.covariance_error());
                 }
             }
             let borrower_name = format_ident!("borrow_{}", &field.name);
@@ -131,5 +138,5 @@ pub fn make_with_functions(info: &StructInfo, options: Options) -> Result<Vec<To
             // to get any other kinds of references to it.
         }
     }
-    Ok(users)
+    (users, errors)
 }

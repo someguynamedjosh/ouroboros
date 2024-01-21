@@ -8,6 +8,16 @@ use ouroboros::self_referencing;
 #[cfg(test)]
 mod ok_tests;
 
+pub struct Ext<'this, T, const REV: bool>(&'this Box<T>);
+
+#[self_referencing(pub_extras)]
+pub struct WithConstParam<T: 'static, const REV: bool> {
+    data: core::cell::RefCell<T>,
+    #[borrows(data)]
+    #[not_covariant]
+    dref: Option<Box<Ext<'this, T, REV>>>,
+}
+
 #[self_referencing]
 /// A simple struct which contains an `i32` and a `&'this i32`.
 pub struct DataAndRef {
