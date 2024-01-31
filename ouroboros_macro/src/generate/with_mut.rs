@@ -2,7 +2,6 @@ use crate::{
     info_structures::{FieldType, Options, StructInfo},
     utils::{replace_this_with_lifetime, uses_this_lifetime},
 };
-use itertools::Itertools;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{Error, Lifetime, WhereClause};
@@ -24,7 +23,7 @@ pub fn make_with_all_mut_function(
         let field_name = &field.name;
         let field_type = &field.typ;
         let lifetime = format_ident!("this{}", lifetime_idents.len());
-        if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed  {
+        if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed {
             lifetime_idents.push(lifetime.clone());
         }
         let field_type = replace_this_with_lifetime(quote! { #field_type }, lifetime.clone());
@@ -87,9 +86,9 @@ pub fn make_with_all_mut_function(
             .predicates
             .extend(extra.predicates.into_iter());
     }
-    for (outlives, lt) in lifetime_idents.iter().tuple_windows() {
-        let lt = Lifetime::new(&format!("'{}", lt), Span::call_site());
-        let outlives = Lifetime::new(&format!("'{}", outlives), Span::call_site());
+    for idents in lifetime_idents.windows(2) {
+        let lt = Lifetime::new(&format!("'{}", idents[1]), Span::call_site());
+        let outlives = Lifetime::new(&format!("'{}", idents[0]), Span::call_site());
         let extra: WhereClause = syn::parse_quote! { where #lt: #outlives };
         generic_where
             .predicates
