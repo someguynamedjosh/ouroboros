@@ -22,7 +22,6 @@ use generate::{
 };
 use heck::ToSnakeCase;
 use info_structures::BuilderType;
-use itertools::Itertools;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2::TokenTree;
@@ -65,7 +64,7 @@ fn self_referencing_impl(
     let with_errors = with_errors
         .into_iter()
         .map(|err| err.emit_as_expr_tokens())
-        .collect_vec();
+        .collect::<Vec<_>>();
     let (with_all_struct_def, with_all_fn_def) = make_with_all_function(&info, options)?;
     let (with_all_mut_struct_def, with_all_mut_fn_def) =
         make_with_all_mut_function(&info, options)?;
