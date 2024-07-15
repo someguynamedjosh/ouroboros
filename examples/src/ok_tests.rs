@@ -36,6 +36,16 @@ struct ChainedAndUndocumented {
 }
 
 #[self_referencing]
+struct CopyRef {
+    data1: i32,
+    data2: i32,
+    #[borrows(data1, data2)]
+    ref1: &'this i32,
+    #[borrows(data1, data2)]
+    ref2: &'this i32,
+}
+
+#[self_referencing]
 struct BoxCheckWithLifetimeParameter<'t> {
     external_data: &'t (),
     #[borrows(external_data)]
@@ -206,6 +216,22 @@ fn box_and_mut_ref() {
     assert!(bar.with_dref(|dref| **dref) == 12);
     bar.with_dref_mut(|dref| **dref = 34);
     assert!(bar.with_dref(|dref| **dref) == 34);
+}
+
+#[test]
+fn copy_ref() {
+    let mut s = CopyRefBuilder {
+        data1: 1,
+        data2: 2,
+        ref1_builder: |x, _| x,
+        ref2_builder: |_, x| x,
+    }
+    .build();
+    assert!(s.with_ref2(|d| **d) == 2);
+    s.with_mut(|fields| {
+        *fields.ref2 = *fields.ref1;
+    });
+    assert!(s.with_ref2(|d| **d) == 1);
 }
 
 // #[test]

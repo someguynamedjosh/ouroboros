@@ -18,11 +18,14 @@ pub fn make_with_all_mut_function(
     let mut mut_fields = Vec::new();
     let mut mut_field_assignments = Vec::new();
     let mut lifetime_idents = Vec::new();
+    let mut lifetime_bounds = Vec::new();
+    let mut lifetime_cache = vec![None; info.fields.len()];
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
-    for field in info.fields.iter().rev() {
+    for (i, field) in info.fields.iter().enumerate().rev() {
         let field_name = &field.name;
         let field_type = &field.typ;
         let lifetime = format_ident!("this{}", lifetime_idents.len());
+        lifetime_cache[i].replace(lifetime.clone());
         if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed {
             lifetime_idents.push(lifetime.clone());
         }
@@ -42,6 +45,16 @@ pub fn make_with_all_mut_function(
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
             // borrowed.
+        }
+    }
+    for (i, field) in info.fields.iter().enumerate() {
+        for borrow in &field.borrows {
+            if !borrow.mutable {
+                lifetime_bounds.push((
+                    lifetime_cache[i].clone().unwrap(),
+                    lifetime_cache[borrow.index].clone().unwrap(),
+                ));
+            }
         }
     }
 
@@ -86,10 +99,10 @@ pub fn make_with_all_mut_function(
             .predicates
             .extend(extra.predicates.into_iter());
     }
-    for idents in lifetime_idents.windows(2) {
-        let lt = Lifetime::new(&format!("'{}", idents[1]), Span::call_site());
-        let outlives = Lifetime::new(&format!("'{}", idents[0]), Span::call_site());
-        let extra: WhereClause = syn::parse_quote! { where #lt: #outlives };
+    for idents in lifetime_bounds {
+        let lt = Lifetime::new(&format!("'{}", idents.1), Span::call_site());
+        let outlives = Lifetime::new(&format!("'{}", idents.0), Span::call_site());
+        let extra: WhereClause = syn::parse_quote! { where #lt: #outlives, #outlives: #lt };
         generic_where
             .predicates
             .extend(extra.predicates.into_iter());
