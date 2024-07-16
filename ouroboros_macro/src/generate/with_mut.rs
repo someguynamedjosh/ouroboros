@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     info_structures::{FieldType, Options, StructInfo},
     utils::{replace_this_with_lifetime, uses_this_lifetime},
@@ -18,16 +20,16 @@ pub fn make_with_all_mut_function(
     let mut mut_fields = Vec::new();
     let mut mut_field_assignments = Vec::new();
     let mut lifetime_idents = Vec::new();
-    let mut lifetime_bounds = Vec::new();
-    let mut lifetime_cache = vec![None; info.fields.len()];
+    let mut borrowed_vars: Vec<HashSet<usize>> = Vec::new();
+
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
-    for (i, field) in info.fields.iter().enumerate().rev() {
+    for field in info.fields.iter().rev() {
         let field_name = &field.name;
         let field_type = &field.typ;
         let lifetime = format_ident!("this{}", lifetime_idents.len());
-        lifetime_cache[i].replace(lifetime.clone());
         if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed {
             lifetime_idents.push(lifetime.clone());
+            borrowed_vars.push(field.borrows.iter().map(|b| b.index).collect());
         }
         let field_type = replace_this_with_lifetime(quote! { #field_type }, lifetime.clone());
         if field.field_type == FieldType::Tail {
@@ -45,16 +47,6 @@ pub fn make_with_all_mut_function(
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
             // borrowed.
-        }
-    }
-    for (i, field) in info.fields.iter().enumerate() {
-        for borrow in &field.borrows {
-            if !borrow.mutable {
-                lifetime_bounds.push((
-                    lifetime_cache[i].clone().unwrap(),
-                    lifetime_cache[borrow.index].clone().unwrap(),
-                ));
-            }
         }
     }
 
@@ -99,13 +91,20 @@ pub fn make_with_all_mut_function(
             .predicates
             .extend(extra.predicates.into_iter());
     }
-    for idents in lifetime_bounds {
-        let lt = Lifetime::new(&format!("'{}", idents.1), Span::call_site());
-        let outlives = Lifetime::new(&format!("'{}", idents.0), Span::call_site());
-        let extra: WhereClause = syn::parse_quote! { where #lt: #outlives, #outlives: #lt };
-        generic_where
-            .predicates
-            .extend(extra.predicates.into_iter());
+    for (i, (s1, ident1)) in borrowed_vars.iter().zip(&lifetime_idents).enumerate() {
+        let lt = Lifetime::new(&format!("'{ident1}"), Span::call_site());
+        for (j, (s2, ident2)) in borrowed_vars.iter().zip(&lifetime_idents).enumerate() {
+            if i == j {
+                continue;
+            }
+            if s1.is_subset(s2) {
+                let outlives = Lifetime::new(&format!("'{ident2}"), Span::call_site());
+                let extra: WhereClause = syn::parse_quote! { where #lt: #outlives };
+                generic_where
+                    .predicates
+                    .extend(extra.predicates.into_iter());
+            }
+        }
     }
     let struct_defs = quote! {
         #[doc=#mut_struct_documentation]
