@@ -1,0 +1,35 @@
+error[E0597]: `s` does not live long enough
+  --> src/main.rs:24:5
+   |
+16 |       let mut s = CopyRefBuilder {
+   |           ----- binding `s` declared here
+...
+24 |       s.with_mut(|f| {
+   |       ^ borrowed value does not live long enough
+   |  _____|
+   | |
+25 | |         *f.ref2 = Some(f.other);
+26 | |         *f.ref1 = *f.ref2;
+27 | |     });
+   | |______- argument requires that `s` is borrowed for `'static`
+...
+30 |   }
+   |   - `s` dropped here while still borrowed
+
+error[E0505]: cannot move out of `s` because it is borrowed
+  --> src/main.rs:29:10
+   |
+16 |       let mut s = CopyRefBuilder {
+   |           ----- binding `s` declared here
+...
+24 |       s.with_mut(|f| {
+   |       - borrow of `s` occurs here
+   |  _____|
+   | |
+25 | |         *f.ref2 = Some(f.other);
+26 | |         *f.ref1 = *f.ref2;
+27 | |     });
+   | |______- argument requires that `s` is borrowed for `'static`
+28 |
+29 |       drop(s);
+   |            ^ move out of `s` occurs here
