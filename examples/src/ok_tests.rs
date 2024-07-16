@@ -51,10 +51,10 @@ struct CopyRef2 {
     #[borrows(data)]
     #[covariant]
     ref1: Option<&'this str>,
-    #[borrows(data)]
+    other: String,
+    #[borrows(data, other)]
     #[covariant]
     ref2: Option<&'this str>,
-    other: String,
 }
 
 #[self_referencing]
@@ -251,22 +251,25 @@ fn copy_ref2() {
     let mut s = CopyRef2Builder {
         data: "test".to_string(),
         ref1_builder: |_| None,
-        ref2_builder: |x| Some(x),
         other: "other".to_string(),
-    }.build();
+        ref2_builder: |x, _| Some(x),
+    }
+    .build();
+
     assert!(s.with_ref2(|d| d.unwrap()) == "test");
     s.with_mut(|f| {
         *f.ref2 = *f.ref1;
     });
     assert!(s.with_ref2(|d| d.is_none()));
     s.with_mut(|f| {
-        *f.ref1 = *f.ref2;
+        *f.ref2 = Some(f.other);
     });
-    assert!(s.with_ref1(|d| d.is_none()));
-    s.with_mut(|f| {
-        *f.ref1 = Some(f.data);
-    });
-    assert!(s.with_ref1(|d| d.unwrap()) == "test");
+    assert!(s.with_ref2(|d| d.unwrap()) == "other");
+
+    // compile error
+    // s.with_mut(|f| {
+    //     *f.ref1 = *f.ref2;
+    // });
 }
 
 // #[test]
