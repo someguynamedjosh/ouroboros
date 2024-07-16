@@ -36,13 +36,25 @@ struct ChainedAndUndocumented {
 }
 
 #[self_referencing]
-struct CopyRef {
+struct CopyRef1 {
     data1: i32,
     data2: i32,
     #[borrows(data1, data2)]
     ref1: &'this i32,
     #[borrows(data1, data2)]
     ref2: &'this i32,
+}
+
+#[self_referencing]
+struct CopyRef2 {
+    data: String,
+    #[borrows(data)]
+    #[covariant]
+    ref1: Option<&'this str>,
+    #[borrows(data)]
+    #[covariant]
+    ref2: Option<&'this str>,
+    other: String,
 }
 
 #[self_referencing]
@@ -219,8 +231,8 @@ fn box_and_mut_ref() {
 }
 
 #[test]
-fn copy_ref() {
-    let mut s = CopyRefBuilder {
+fn copy_ref1() {
+    let mut s = CopyRef1Builder {
         data1: 1,
         data2: 2,
         ref1_builder: |x, _| x,
@@ -232,6 +244,29 @@ fn copy_ref() {
         *fields.ref2 = *fields.ref1;
     });
     assert!(s.with_ref2(|d| **d) == 1);
+}
+
+#[test]
+fn copy_ref2() {
+    let mut s = CopyRef2Builder {
+        data: "test".to_string(),
+        ref1_builder: |_| None,
+        ref2_builder: |x| Some(x),
+        other: "other".to_string(),
+    }.build();
+    assert!(s.with_ref2(|d| d.unwrap()) == "test");
+    s.with_mut(|f| {
+        *f.ref2 = *f.ref1;
+    });
+    assert!(s.with_ref2(|d| d.is_none()));
+    s.with_mut(|f| {
+        *f.ref1 = *f.ref2;
+    });
+    assert!(s.with_ref1(|d| d.is_none()));
+    s.with_mut(|f| {
+        *f.ref1 = Some(f.data);
+    });
+    assert!(s.with_ref1(|d| d.unwrap()) == "test");
 }
 
 // #[test]
