@@ -23,13 +23,17 @@ pub fn make_with_all_mut_function(
     let mut borrowed_vars: Vec<HashSet<usize>> = Vec::new();
 
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
-    for field in info.fields.iter().rev() {
+    for (i, field) in info.fields.iter().enumerate().rev() {
         let field_name = &field.name;
         let field_type = &field.typ;
         let lifetime = format_ident!("this{}", lifetime_idents.len());
         if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed {
             lifetime_idents.push(lifetime.clone());
-            borrowed_vars.push(field.borrows.iter().map(|b| b.index).collect());
+            let mut borrowed: HashSet<_> = field.borrows.iter().map(|b| b.index).collect();
+            if borrowed.is_empty() {
+                borrowed.insert(i);
+            }
+            borrowed_vars.push(borrowed);
         }
         let field_type = replace_this_with_lifetime(quote! { #field_type }, lifetime.clone());
         if field.field_type == FieldType::Tail {

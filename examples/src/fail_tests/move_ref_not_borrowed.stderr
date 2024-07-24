@@ -1,5 +1,5 @@
 error[E0597]: `s` does not live long enough
-  --> src/fail_tests/move_ref_out_of_bound.rs:24:5
+  --> src/fail_tests/move_ref_not_borrowed.rs:24:5
    |
 16 |       let mut s = CopyRefBuilder {
    |           ----- binding `s` declared here
@@ -8,16 +8,15 @@ error[E0597]: `s` does not live long enough
    |       ^ borrowed value does not live long enough
    |  _____|
    | |
-25 | |         *f.ref2 = Some(f.other);
-26 | |         *f.ref1 = *f.ref2;
-27 | |     });
+25 | |         *f.ref1 = Some(f.other);
+26 | |     });
    | |______- argument requires that `s` is borrowed for `'static`
 ...
-30 |   }
+29 |   }
    |   - `s` dropped here while still borrowed
 
 error[E0505]: cannot move out of `s` because it is borrowed
-  --> src/fail_tests/move_ref_out_of_bound.rs:29:10
+  --> src/fail_tests/move_ref_not_borrowed.rs:28:10
    |
 16 |       let mut s = CopyRefBuilder {
    |           ----- binding `s` declared here
@@ -26,10 +25,9 @@ error[E0505]: cannot move out of `s` because it is borrowed
    |       - borrow of `s` occurs here
    |  _____|
    | |
-25 | |         *f.ref2 = Some(f.other);
-26 | |         *f.ref1 = *f.ref2;
-27 | |     });
+25 | |         *f.ref1 = Some(f.other);
+26 | |     });
    | |______- argument requires that `s` is borrowed for `'static`
-28 |
-29 |       drop(s);
+27 |
+28 |       drop(s);
    |            ^ move out of `s` occurs here
