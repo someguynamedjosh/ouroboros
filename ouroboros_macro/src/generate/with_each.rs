@@ -9,13 +9,16 @@ pub enum ProcessingError {
     Covariance(Vec<Diagnostic>),
 }
 
-pub fn make_with_functions(info: &StructInfo, options: Options) -> (Vec<TokenStream>, Vec<Diagnostic>) {
+pub fn make_with_functions(
+    info: &StructInfo,
+    options: Options,
+) -> (Vec<TokenStream>, Vec<Diagnostic>) {
     let mut users = Vec::new();
     let mut errors = Vec::new();
     for field in &info.fields {
         let visibility = &field.vis;
         let field_name = &field.name;
-        let field_type = &field.typ;
+        let field_type = field.ref_target_type();
         // If the field is not a tail, we need to serve up the same kind of reference that other
         // fields in the struct may have borrowed to ensure safety.
         if field.field_type == FieldType::Tail {

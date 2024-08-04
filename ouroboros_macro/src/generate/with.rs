@@ -17,7 +17,7 @@ pub fn make_with_all_function(
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
     for field in info.fields.iter().rev() {
         let field_name = &field.name;
-        let field_type = &field.typ;
+        let field_type = field.ref_target_type();
         if field.field_type == FieldType::Tail {
             fields.push(quote! { #visibility #field_name: &'outer_borrow #field_type });
             field_assignments.push(quote! { #field_name: &this.#field_name });

@@ -152,6 +152,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
                 let mut self_referencing = false;
                 let mut covariant = type_is_covariant_over_this_lifetime(&field.ty);
                 let mut remove_attrs = Vec::new();
+                let mut no_box = None;
                 for (index, attr) in field.attrs.iter().enumerate() {
                     let path = &attr.path();
                     if path.leading_colon.is_some() {
@@ -182,6 +183,17 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
                         covariant = Some(false);
                         remove_attrs.push(index);
                     }
+                    if path.segments.first().unwrap().ident == "no_box" {
+                        if no_box.is_some() {
+                            panic!("TODO: Nice error, no_box specified twice.");
+                        }
+                        no_box = Some(path.segments.first().unwrap().ident.span());
+                        remove_attrs.push(index);
+                    }
+                }
+                if no_box.is_some() && self_referencing {
+                    // TODO: This check isn't complete, we don't check the field is actually borrowed.
+                    panic!("TODO: Nice error, no_box on a non-tail field");
                 }
                 // We should not be able to access the field outside of the hidden module where
                 // everything is generated.
@@ -194,6 +206,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
                     borrows,
                     self_referencing,
                     covariant,
+                    no_box,
                 });
             }
         }

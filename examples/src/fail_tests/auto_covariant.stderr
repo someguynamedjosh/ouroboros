@@ -11,7 +11,7 @@ error: Ouroboros cannot automatically determine if this type is covariant.
   --> src/fail_tests/auto_covariant.rs:11:12
    |
 11 |     field: NotGuaranteedCovariant<'this>
-   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |            ^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0601]: `main` function not found in crate `$CRATE`
   --> src/fail_tests/auto_covariant.rs:12:2

@@ -1,8 +1,11 @@
 error[E0505]: cannot move out of `instance` because it is borrowed
   --> src/fail_tests/use_moved_ref_after_free.rs:17:10
    |
+11 |     let instance = BoxAndRefBuilder {
+   |         -------- binding `instance` declared here
+...
 16 |     instance.with_data_ref(|dref| stored_ref = Some(*dref));
-   |     ------------------------------------------------------- borrow of `instance` occurs here
+   |     -------- borrow of `instance` occurs here
 17 |     drop(instance);
    |          ^^^^^^^^ move out of `instance` occurs here
 18 |     println!("{:?}", stored_ref);

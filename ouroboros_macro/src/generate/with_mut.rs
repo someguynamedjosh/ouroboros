@@ -21,7 +21,7 @@ pub fn make_with_all_mut_function(
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
     for field in info.fields.iter().rev() {
         let field_name = &field.name;
-        let field_type = &field.typ;
+        let field_type = field.ref_target_type();
         let lifetime = format_ident!("this{}", lifetime_idents.len());
         if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed {
             lifetime_idents.push(lifetime.clone());

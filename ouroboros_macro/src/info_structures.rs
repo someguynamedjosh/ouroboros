@@ -1,10 +1,10 @@
 use crate::utils::{make_generic_arguments, make_generic_consumers, replace_this_with_lifetime};
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    punctuated::Punctuated, token::Comma, Attribute, ConstParam, Error, GenericParam, Generics,
-    LifetimeParam, Type, TypeParam, Visibility, spanned::Spanned, 
+    punctuated::Punctuated, spanned::Spanned, token::Comma, Attribute, ConstParam, Error,
+    GenericParam, Generics, LifetimeParam, Type, TypeParam, Visibility,
 };
 
 #[derive(Clone, Copy)]
@@ -144,6 +144,9 @@ pub struct StructFieldInfo {
     /// Some(false), we should avoid making borrow_* or borrow_*_mut functions as they will not
     /// be able to compile.
     pub covariant: Option<bool>,
+    /// If this is true, the field is already Aliasable and StableDeref so we don't need to wrap
+    /// it in AliasableBox. Of course we need to verify that.
+    pub no_box: Option<Span>,
 }
 
 #[derive(Clone)]
@@ -168,21 +171,36 @@ impl StructFieldInfo {
         self.field_type != FieldType::Tail
     }
 
+    pub fn is_stored_in_aliasable_box(&self) -> bool {
+        self.is_borrowed() && self.no_box.is_none()
+    }
+
     pub fn is_mutably_borrowed(&self) -> bool {
         self.field_type == FieldType::BorrowedMut
     }
 
     pub fn boxed(&self) -> TokenStream {
         let name = &self.name;
-        quote! { ::ouroboros::macro_help::aliasable_boxed(#name) }
+        match self.no_box {
+            Some(_) => quote!(#name),
+            None => quote! { ::ouroboros::macro_help::aliasable_boxed(#name) },
+        }
     }
 
     pub fn stored_type(&self) -> TokenStream {
         let t = &self.typ;
-        if self.is_borrowed() {
+        if self.is_stored_in_aliasable_box() {
             quote! { ::ouroboros::macro_help::AliasableBox<#t> }
         } else {
             quote! { #t }
+        }
+    }
+
+    pub fn ref_target_type(&self) -> TokenStream {
+        let typ = &self.typ;
+        match self.no_box {
+            Some(_) => quote! { ::ouroboros::macro_help::DerefTarget<#typ> },
+            None => typ.to_token_stream(),
         }
     }
 
@@ -244,13 +262,13 @@ impl StructFieldInfo {
             for borrow in &self.borrows {
                 if borrow.mutable {
                     let field = &info.fields[borrow.index];
-                    let field_type = &field.typ;
+                    let field_type = field.ref_target_type();
                     field_builder_params.push(quote! {
                         &'this mut #field_type
                     });
                 } else {
                     let field = &info.fields[borrow.index];
-                    let field_type = &field.typ;
+                    let field_type = field.ref_target_type();
                     field_builder_params.push(quote! {
                         &'this #field_type
                     });

@@ -7,3 +7,11 @@ error[E0599]: no function or associated item named `is_std_box_type` found for s
    = note: the function or associated item was found for
            - `CheckIfTypeIsStd<std::boxed::Box<T>>`
    = note: this error originates in the attribute macro `self_referencing` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused variable: `simple`
+  --> src/fail_tests/refuse_non_std_box.rs:27:9
+   |
+27 |     let simple = Simple::new(Box::new(format!("Hello world")), |data_ref| data_ref);
+   |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_simple`
+   |
+   = note: `#[warn(unused_variables)]` on by default
