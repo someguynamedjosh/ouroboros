@@ -9,9 +9,11 @@ struct Test {
 }
 
 #[self_referencing]
-struct Test {
+struct Test2 {
     #[no_box]
     data: Box<()>,
     #[borrows(data)]
     field: (),
 }
+
+fn main() {}

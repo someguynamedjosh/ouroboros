@@ -1,0 +1,127 @@
+error[E0277]: the trait bound `(): Deref` is not satisfied
+ --> src/fail_tests/no_box_non_aliasable.rs:3:1
+  |
+3 | #[self_referencing]
+  | ^^^^^^^^^^^^^^^^^^^ the trait `Deref` is not implemented for `()`
+  |
+  = note: this error originates in the attribute macro `self_referencing` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0614]: type `()` cannot be dereferenced
+ --> src/fail_tests/no_box_non_aliasable.rs:3:1
+  |
+3 | #[self_referencing]
+  | ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `self_referencing` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `(): Deref` is not satisfied
+ --> src/fail_tests/no_box_non_aliasable.rs:6:5
+  |
+6 |     data: (),
+  |     ^^^^ the trait `Deref` is not implemented for `()`
+
+error[E0308]: mismatched types
+ --> src/fail_tests/no_box_non_aliasable.rs:3:1
+  |
+3 | #[self_referencing]
+  | ^^^^^^^^^^^^^^^^^^^ expected `&<() as Deref>::Target`, found `&()`
+...
+8 |     field: (),
+  |     ----- arguments to this function are incorrect
+  |
+  = note: expected reference `&<() as Deref>::Target`
+             found reference `&()`
+  = help: consider constraining the associated type `<() as Deref>::Target` to `()` or calling a method that returns `<() as Deref>::Target`
+  = note: for more information, visit https://doc.rust-lang.org/book/ch19-03-advanced-traits.html
+note: type parameter defined here
+ --> src/fail_tests/no_box_non_aliasable.rs:3:1
+  |
+3 | #[self_referencing]
+  | ^^^^^^^^^^^^^^^^^^^
+  = note: this error originates in the attribute macro `self_referencing` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+ --> src/fail_tests/no_box_non_aliasable.rs:3:1
+  |
+3 | #[self_referencing]
+  | ^^^^^^^^^^^^^^^^^^^
+  | |
+  | expected `&<() as Deref>::Target`, found `&()`
+  | arguments to this function are incorrect
+  |
+  = note: expected reference `&'outer_borrow <() as Deref>::Target`
+             found reference `&()`
+  = help: consider constraining the associated type `<() as Deref>::Target` to `()` or calling a method that returns `<() as Deref>::Target`
+  = note: for more information, visit https://doc.rust-lang.org/book/ch19-03-advanced-traits.html
+note: type parameter defined here
+ --> src/fail_tests/no_box_non_aliasable.rs:3:1
+  |
+3 | #[self_referencing]
+  | ^^^^^^^^^^^^^^^^^^^
+  = note: this error originates in the attribute macro `self_referencing` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `(): aliasable_deref_trait::AliasableDeref` is not satisfied
+ --> src/fail_tests/no_box_non_aliasable.rs:5:7
+  |
+5 |     #[no_box]
+  |       ^^^^^^ the trait `aliasable_deref_trait::AliasableDeref` is not implemented for `()`
+  |
+  = help: the following other types implement trait `aliasable_deref_trait::AliasableDeref`:
+            AliasableBox<T>
+            Arc<T>
+            MutexGuard<'a, T>
+            Rc<T>
+            Ref<'a, T>
+            RefMut<'a, T>
+            RwLockReadGuard<'a, T>
+            RwLockWriteGuard<'a, T>
+          and $N others
+note: required by a bound in `AssertAliasableStableDeref`
+ --> $WORKSPACE/ouroboros/src/lib.rs
+  |
+  |     pub struct AssertAliasableStableDeref<T: AliasableDeref + StableDeref>(PhantomData<T>);
+  |                                              ^^^^^^^^^^^^^^ required by this bound in `AssertAliasableStableDeref`
+
+error[E0277]: the trait bound `(): stable_deref_trait::StableDeref` is not satisfied
+ --> src/fail_tests/no_box_non_aliasable.rs:5:7
+  |
+5 |     #[no_box]
+  |       ^^^^^^ the trait `stable_deref_trait::StableDeref` is not implemented for `()`
+  |
+  = help: the following other types implement trait `stable_deref_trait::StableDeref`:
+            &'a T
+            &'a mut T
+            AliasableBox<T>
+            Arc<T>
+            Box<T>
+            CString
+            MutexGuard<'a, T>
+            OsString
+          and $N others
+note: required by a bound in `AssertAliasableStableDeref`
+ --> $WORKSPACE/ouroboros/src/lib.rs
+  |
+  |     pub struct AssertAliasableStableDeref<T: AliasableDeref + StableDeref>(PhantomData<T>);
+  |                                                               ^^^^^^^^^^^ required by this bound in `AssertAliasableStableDeref`
+
+error[E0277]: the trait bound `Box<()>: aliasable_deref_trait::AliasableDeref` is not satisfied
+  --> src/fail_tests/no_box_non_aliasable.rs:13:7
+   |
+13 |     #[no_box]
+   |       ^^^^^^ the trait `aliasable_deref_trait::AliasableDeref` is not implemented for `Box<()>`
+   |
+   = help: the following other types implement trait `aliasable_deref_trait::AliasableDeref`:
+             AliasableBox<T>
+             Arc<T>
+             MutexGuard<'a, T>
+             Rc<T>
+             Ref<'a, T>
+             RefMut<'a, T>
+             RwLockReadGuard<'a, T>
+             RwLockWriteGuard<'a, T>
+           and $N others
+note: required by a bound in `AssertAliasableStableDeref`
+  --> $WORKSPACE/ouroboros/src/lib.rs
+   |
+   |     pub struct AssertAliasableStableDeref<T: AliasableDeref + StableDeref>(PhantomData<T>);
+   |                                              ^^^^^^^^^^^^^^ required by this bound in `AssertAliasableStableDeref`

@@ -1,13 +1,16 @@
 error[E0597]: `t` does not live long enough
   --> src/fail_tests/swap_refs_for_use_after_free.rs:26:5
    |
-26 | /     t.with_mut(|fields| {
+21 |       let mut t = Tricky::new(
+   |           ----- binding `t` declared here
+...
+26 |       t.with_mut(|fields| {
+   |       ^ borrowed value does not live long enough
+   |  _____|
+   | |
 27 | |         *fields.ref1 = PrintStrRef(fields.data2);
 28 | |     });
-   | |      ^
-   | |      |
-   | |______borrowed value does not live long enough
-   |        argument requires that `t` is borrowed for `'static`
+   | |______- argument requires that `t` is borrowed for `'static`
 29 |       drop(t);
 30 |   }
    |   - `t` dropped here while still borrowed
@@ -15,12 +18,15 @@ error[E0597]: `t` does not live long enough
 error[E0505]: cannot move out of `t` because it is borrowed
   --> src/fail_tests/swap_refs_for_use_after_free.rs:29:10
    |
-26 | /     t.with_mut(|fields| {
+21 |       let mut t = Tricky::new(
+   |           ----- binding `t` declared here
+...
+26 |       t.with_mut(|fields| {
+   |       - borrow of `t` occurs here
+   |  _____|
+   | |
 27 | |         *fields.ref1 = PrintStrRef(fields.data2);
 28 | |     });
-   | |      -
-   | |      |
-   | |______borrow of `t` occurs here
-   |        argument requires that `t` is borrowed for `'static`
+   | |______- argument requires that `t` is borrowed for `'static`
 29 |       drop(t);
    |            ^ move out of `t` occurs here
