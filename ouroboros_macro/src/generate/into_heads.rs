@@ -23,7 +23,7 @@ pub fn make_into_heads(info: &StructInfo, options: Options) -> (TokenStream, Tok
             code.push(quote! { ::core::mem::drop(this.#field_name); });
         } else {
             code.push(quote! { let #field_name = this.#field_name; });
-            if field.is_borrowed() {
+            if field.is_stored_in_aliasable_box() {
                 field_initializers
                     .push(quote! { #field_name: ::ouroboros::macro_help::unbox(#field_name) });
             } else {

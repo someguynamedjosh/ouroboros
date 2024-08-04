@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
 use syn::GenericParam;
 
 use crate::{
@@ -28,6 +28,12 @@ pub fn make_type_asserts(info: &StructInfo) -> TokenStream {
                 replace_this_with_lifetime(quote! { #field_type }, fake_lifetime.clone());
             checks.push(quote! {
                 ::ouroboros::macro_help::CheckIfTypeIsStd::<#static_field_type>::#checker_name();
+            });
+        }
+
+        if let Some(no_box_span) = field.no_box {
+            checks.push(quote_spanned! {no_box_span=>
+                let _: ::ouroboros::macro_help::AssertAliasableStableDeref<#field_type>;
             });
         }
     }

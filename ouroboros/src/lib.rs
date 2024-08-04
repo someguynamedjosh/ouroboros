@@ -344,15 +344,31 @@
 /// fields as mutable at the same time and also have immutable access to any remaining fields.
 /// ### `MyStruct::into_heads(self) -> Heads`
 /// Drops all self-referencing fields and returns a struct containing all **head fields**.
+///
+/// # Performance
+///
+/// By default each borrowed field is wrapped in [`AliasableBox`]. If your fields already have an indirection,
+/// you can save this cost by specifying `#[no_box]` on them. This will require the field's type to be
+/// [`AliasableDeref`] and [`StableDeref`]. Note that `Box`, `Vec` and `String` from the standard library
+/// do not fulfill this requirement, but there are replacements in the [`aliasable`] crate.
+///
+/// [`AliasableBox`]: https://docs.rs/aliasable/latest/aliasable/boxed/struct.AliasableBox.html
+/// [`AliasableDeref`]: https://docs.rs/aliasable/latest/aliasable/trait.AliasableDeref.html
+/// [`StableDeref`]: https://docs.rs/aliasable/latest/aliasable/trait.StableDeref.html
+/// [`aliasable`]: https://docs.rs/aliasable
 pub use ouroboros_macro::self_referencing;
 
 #[doc(hidden)]
 pub mod macro_help {
     pub extern crate alloc;
 
+    use core::marker::PhantomData;
+    use core::ops::Deref;
+
     pub use aliasable::boxed::AliasableBox;
-    pub use static_assertions::assert_impl_all;
     use aliasable::boxed::UniqueBox;
+    use aliasable::{AliasableDeref, StableDeref};
+    pub use static_assertions::assert_impl_all;
 
     pub struct CheckIfTypeIsStd<T>(core::marker::PhantomData<T>);
 
@@ -388,7 +404,7 @@ pub mod macro_help {
     ///
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
-    pub unsafe fn change_lifetime<'old, 'new: 'old, T: 'new>(data: &'old T) -> &'new T {
+    pub unsafe fn change_lifetime<'old, 'new: 'old, T: 'new + ?Sized>(data: &'old T) -> &'new T {
         &*(data as *const _)
     }
 
@@ -398,7 +414,13 @@ pub mod macro_help {
     ///
     /// The caller must ensure that the returned reference is not used after the originally passed
     /// reference would become invalid.
-    pub unsafe fn change_lifetime_mut<'old, 'new: 'old, T: 'new>(data: &'old mut T) -> &'new mut T {
+    pub unsafe fn change_lifetime_mut<'old, 'new: 'old, T: 'new + ?Sized>(
+        data: &'old mut T,
+    ) -> &'new mut T {
         &mut *(data as *mut _)
     }
+
+    pub struct AssertAliasableStableDeref<T: AliasableDeref + StableDeref>(PhantomData<T>);
+
+    pub type DerefTarget<T> = <T as Deref>::Target;
 }

@@ -107,7 +107,7 @@ pub fn create_try_builder_and_constructor(
                 field_name
             );
             if !field.self_referencing {
-                if field.is_borrowed() {
+                if field.is_stored_in_aliasable_box() {
                     head_recover_code[current_head_index] = quote! {
                         #field_name: ::ouroboros::macro_help::unbox(#field_name)
                     };
@@ -125,10 +125,7 @@ pub fn create_try_builder_and_constructor(
             // Ok so hear me out basically without this thing here my IDE thinks the rest of the
             // code is a string and it all turns green.
             {}
-            doc_table += &format!(
-                "| `{}` | Use a function or closure: `(",
-                builder_name
-            );
+            doc_table += &format!("| `{}` | Use a function or closure: `(", builder_name);
             let mut builder_args = Vec::new();
             for (index, borrow) in field.borrows.iter().enumerate() {
                 let borrowed_name = &info.fields[borrow.index].name;

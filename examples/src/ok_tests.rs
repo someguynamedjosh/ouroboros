@@ -1,5 +1,6 @@
 use alloc::{borrow::ToOwned, boxed::Box};
 use core::fmt::Debug;
+use std::rc::Rc;
 
 use ouroboros::self_referencing;
 
@@ -7,7 +8,8 @@ use ouroboros::self_referencing;
 
 #[self_referencing]
 struct TraitObject {
-    data: Box<dyn Debug>,
+    #[no_box]
+    data: Rc<dyn Debug>,
     #[borrows(data)]
     dref: &'this dyn Debug,
 }
@@ -273,7 +275,7 @@ fn double_lifetime() {
 }
 
 #[cfg(not(feature = "miri"))]
-#[rustversion::stable(1.62)]
+#[rustversion::stable(1.80)]
 mod compile_tests {
     /// Tests that all files in fail_tests fail to compile.
     #[test]
