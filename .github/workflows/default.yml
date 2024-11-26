@@ -35,7 +35,7 @@ jobs:
         # aarch64-unknown-none is Tier 2, has no `std`, but does have atomic pointers.
         rustup target add aarch64-unknown-none
         cargo check --verbose --target aarch64-unknown-none --no-default-features
-    
+
   miri-test:
     runs-on: ubuntu-latest
     steps:
