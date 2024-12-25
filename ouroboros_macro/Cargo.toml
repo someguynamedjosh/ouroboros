@@ -12,7 +12,7 @@ repository = "https://github.com/someguynamedjosh/ouroboros"
 proc-macro = true
 
 [dependencies]
-heck = "0.4.1"
+heck = "0.5"
 proc-macro2 = "1.0"
 proc-macro2-diagnostics = "0.10"
 quote = "1.0"
