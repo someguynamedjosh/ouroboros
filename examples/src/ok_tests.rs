@@ -86,6 +86,34 @@ struct DeriveCompilesOk<T: 'static> {
 //     y: &'this (),
 // }
 
+struct RefTakerWhenBuilt<'a> {
+    the_ref: &'a [u8],
+    index: usize,
+}
+
+impl<'a> RefTakerWhenBuilt<'a> {
+    pub fn new<'b: 'a>(in_ref: &'b [u8]) -> RefTakerWhenBuilt<'a> {
+        RefTakerWhenBuilt {
+            the_ref: in_ref,
+            index: 0,
+        }
+    }
+
+    pub fn next(&mut self) -> u8 {
+        let e = self.the_ref[self.index];
+        self.index += 1;
+        e
+    }
+}
+
+#[self_referencing]
+struct DataAndRefTakerWhenBuilt {
+    data: Vec<u8>,
+    #[not_covariant]
+    #[borrows(data)]
+    ref_taker_when_built: RefTakerWhenBuilt<'this>,
+}
+
 #[test]
 fn box_and_ref() {
     let bar = BoxAndRefBuilder {
@@ -270,6 +298,20 @@ fn double_lifetime() {
         #[borrows(external, external2)]
         internal: &'this &'b str,
     }
+}
+
+#[test]
+fn data_and_ref_taker_when_built() {
+    let data: Vec<u8> = vec![0, 1];
+    let mut self_ref = DataAndRefTakerWhenBuiltBuilder {
+        data,
+        ref_taker_when_built_builder: |d: &Vec<u8>| RefTakerWhenBuilt::new(d),
+    }
+    .build();
+    let e = self_ref.with_ref_taker_when_built_mut(|s| s.next());
+    assert_eq!(e, 0);
+    let e = self_ref.with_ref_taker_when_built_mut(|s| s.next());
+    assert_eq!(e, 1);
 }
 
 #[cfg(not(feature = "miri"))]
