@@ -86,6 +86,24 @@ struct DeriveCompilesOk<T: 'static> {
 //     y: &'this (),
 // }
 
+struct PhraseRef<'a> {
+    data: &'a mut String,
+}
+
+impl<'a> PhraseRef<'a> {
+    fn change_phrase(&mut self) {
+        *self.data = self.data.replace("Hello", "Goodbye");
+    }
+}
+
+#[self_referencing]
+struct DataAndCustomRef {
+    data: String,
+    #[borrows(mut data)]
+    #[not_covariant]
+    phrase: PhraseRef<'this>,
+}
+
 #[test]
 fn box_and_ref() {
     let bar = BoxAndRefBuilder {
@@ -270,6 +288,18 @@ fn double_lifetime() {
         #[borrows(external, external2)]
         internal: &'this &'b str,
     }
+}
+
+#[test]
+fn custom_ref() {
+    let mut instance = DataAndCustomRefBuilder {
+        data: "Hello world!".to_owned(),
+        phrase_builder: |data| PhraseRef { data },
+    }
+    .build();
+    instance.with_phrase_mut(|phrase| phrase.change_phrase());
+    let modified_data = instance.into_heads().data;
+    assert_eq!(modified_data, "Goodbye world!");
 }
 
 #[cfg(not(feature = "miri"))]
