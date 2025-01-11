@@ -248,7 +248,7 @@ pub fn parse_struct(def: &ItemStruct) -> Result<StructInfo, Error> {
             return Err(Error::new(p.span(), "Unsupported attribute".to_string()));
         }
         let name = p[0].ident.to_string();
-        let good = matches!(&name[..], "clippy" | "allow" | "deny" | "doc");
+        let good = matches!(&name[..], "clippy" | "allow" | "deny" | "doc" | "cfg");
         if good {
             attributes.push(attr.clone())
         } else if name == "derive" {
