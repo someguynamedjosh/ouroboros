@@ -63,7 +63,7 @@ fn self_referencing_impl(
     let (with_defs, with_errors) = make_with_functions(&info, options);
     let with_errors = with_errors
         .into_iter()
-        .map(|err| err.emit_as_expr_tokens())
+        .map(|err| err.emit_as_item_tokens())
         .collect::<Vec<_>>();
     let (with_all_struct_def, with_all_fn_def) = make_with_all_function(&info, options)?;
     let (with_all_mut_struct_def, with_all_mut_fn_def) =
