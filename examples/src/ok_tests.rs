@@ -86,32 +86,22 @@ struct DeriveCompilesOk<T: 'static> {
 //     y: &'this (),
 // }
 
-struct RefTakerWhenBuilt<'a> {
-    the_ref: &'a [u8],
-    index: usize,
+struct PhraseRef<'a> {
+    data: &'a mut String,
 }
 
-impl<'a> RefTakerWhenBuilt<'a> {
-    pub fn new<'b: 'a>(in_ref: &'b [u8]) -> RefTakerWhenBuilt<'a> {
-        RefTakerWhenBuilt {
-            the_ref: in_ref,
-            index: 0,
-        }
-    }
-
-    pub fn next(&mut self) -> u8 {
-        let e = self.the_ref[self.index];
-        self.index += 1;
-        e
+impl<'a> PhraseRef<'a> {
+    fn change_phrase(&mut self) {
+        *self.data = self.data.replace("Hello", "Goodbye");
     }
 }
 
 #[self_referencing]
-struct DataAndRefTakerWhenBuilt {
-    data: Vec<u8>,
+struct DataAndCustomRef {
+    data: String,
+    #[borrows(mut data)]
     #[not_covariant]
-    #[borrows(data)]
-    ref_taker_when_built: RefTakerWhenBuilt<'this>,
+    phrase: PhraseRef<'this>,
 }
 
 #[test]
@@ -301,17 +291,15 @@ fn double_lifetime() {
 }
 
 #[test]
-fn data_and_ref_taker_when_built() {
-    let data: Vec<u8> = vec![0, 1];
-    let mut self_ref = DataAndRefTakerWhenBuiltBuilder {
-        data,
-        ref_taker_when_built_builder: |d: &Vec<u8>| RefTakerWhenBuilt::new(d),
+fn custom_ref() {
+    let mut instance = DataAndCustomRefBuilder {
+        data: "Hello world!".to_owned(),
+        phrase_builder: |data| PhraseRef { data },
     }
     .build();
-    let e = self_ref.with_ref_taker_when_built_mut(|s| s.next());
-    assert_eq!(e, 0);
-    let e = self_ref.with_ref_taker_when_built_mut(|s| s.next());
-    assert_eq!(e, 1);
+    instance.with_phrase_mut(|phrase| phrase.change_phrase());
+    let modified_data = instance.into_heads().data;
+    assert_eq!(modified_data, "Goodbye world!");
 }
 
 #[cfg(not(feature = "miri"))]
