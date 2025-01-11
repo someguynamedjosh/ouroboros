@@ -93,6 +93,7 @@ fn self_referencing_impl(
             #actual_struct_def
             #internal_struct_def
             #drop_impl
+            #[allow(clippy::too_many_arguments)] //This one makes a difference, verified
             #borrowchk_summoner
             #builder_def
             #async_builder_def
@@ -105,6 +106,7 @@ fn self_referencing_impl(
             #(#with_errors)*
             #heads_struct_def
             #impls
+            #[allow(clippy::too_many_arguments)] //This one makes a difference, verified
             impl <#generic_params> #struct_name <#(#generic_args),*> #generic_where {
                 #constructor_def
                 #async_constructor_def
