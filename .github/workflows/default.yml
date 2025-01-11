@@ -16,7 +16,7 @@ jobs:
       matrix:
         RUST: ["1.63", stable, beta, nightly]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set Rust version
         run: rustup default ${{ matrix.RUST }}
       - name: Build
@@ -27,7 +27,7 @@ jobs:
   no-std-test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Build
       run: cargo build --verbose --no-default-features
     - name: Check under no_std
@@ -39,7 +39,7 @@ jobs:
   miri-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup MIRI-Compatible Toolchain
         run: |
           MIRI_NIGHTLY=nightly-$(curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/miri)
