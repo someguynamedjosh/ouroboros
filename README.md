@@ -3,29 +3,8 @@
 [![Ouroboros on Crates.IO](https://img.shields.io/crates/v/ouroboros)](https://crates.io/crates/ouroboros)
 [![Documentation](https://img.shields.io/badge/documentation-link-success)](https://docs.rs/ouroboros)
 
-
 Easy self-referential struct generation for Rust. 
 Dual licensed under MIT / Apache 2.0.
-
-While this crate is `no_std` compatible, it still requires the `alloc` crate.
-
-Version notes:
-- Version `0.18.0` now correctly refuses to compile unsound usages of `with_mut`, but requires Rust 1.63 or later.
-- Version `0.17.0` reintroduces type parameter support, but requires at least
-  version 1.60 of the Rust toolchain.
-- Version `0.16.0` fixes a potential soundness issue but removes template
-  parameter support.
-- Version `0.13.0` and later contain checks for additional situations which
-  cause undefined behavior if not caught.
-- Version `0.11.0` and later place restrictions on derive macros, earlier
-  versions allowed using them in ways which could lead to undefined behavior if
-  not used properly.
-- Version `0.10.0` and later automatically box every field. This is done
-  to prevent undefined behavior, but has the side effect of making the library
-  easier to work with.
-
-Tests are located in the examples/ folder because they need to be in a crate
-outside of `ouroboros` for the `self_referencing` macro to work properly.
 
 ```rust
 use ouroboros::self_referencing;
@@ -80,3 +59,49 @@ fn main() {
     // println!("{:?}", *int_ref);
 }
 ```
+
+Since the macro this crate provides adds lots of public functions to structs it is used on (each wrapping a particular unsafe operation in a safe way), it is not recommended to use this macro on types exposed to users of a library. Instead, it is expected that this macro will be used on an internal struct, then wrapped with a friendly struct that the library exports:
+
+```rust
+// The extra wrapper methods are only added to this struct.
+#[self_referencing]
+struct Internal {
+    // ...
+}
+
+// This struct is free to provide a nicer interface that is not polluted by the
+// extra functions #[self_referencing] adds.
+pub struct Friendly {
+    internal: Internal,
+}
+
+impl Friendly {
+    pub fn new(/* ... */) -> Self {
+        // Complicated code here...
+    }
+    
+    pub fn do_the_thing(&self) -> T {
+        // More complicated code here....
+    }
+}
+```
+
+While this crate is `no_std` compatible, it still requires the `alloc` crate.
+
+Version notes:
+- Version `0.18.0` now correctly refuses to compile unsound usages of `with_mut`, but requires Rust 1.63 or later.
+- Version `0.17.0` reintroduces type parameter support, but requires at least
+  version 1.60 of the Rust toolchain.
+- Version `0.16.0` fixes a potential soundness issue but removes template
+  parameter support.
+- Version `0.13.0` and later contain checks for additional situations which
+  cause undefined behavior if not caught.
+- Version `0.11.0` and later place restrictions on derive macros, earlier
+  versions allowed using them in ways which could lead to undefined behavior if
+  not used properly.
+- Version `0.10.0` and later automatically box every field. This is done
+  to prevent undefined behavior, but has the side effect of making the library
+  easier to work with.
+
+Tests are located in the examples/ folder because they need to be in a crate
+outside of `ouroboros` for the `self_referencing` macro to work properly.
