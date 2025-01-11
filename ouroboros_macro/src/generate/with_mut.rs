@@ -19,17 +19,17 @@ pub fn make_with_all_mut_function(
     let mut mut_field_assignments = Vec::new();
     let mut lifetime_idents = Vec::new();
     // I don't think the reverse is necessary but it does make the expanded code more uniform.
-    for field in info.fields.iter().rev() {
+    for (index, field) in info.fields.iter().rev().enumerate() {
         let field_name = &field.name;
-        let field_type = &field.typ;
-        let lifetime = format_ident!("this{}", lifetime_idents.len());
-        if uses_this_lifetime(quote! { #field_type }) || field.field_type == FieldType::Borrowed {
-            lifetime_idents.push(lifetime.clone());
-        }
-        let field_type = replace_this_with_lifetime(quote! { #field_type }, lifetime.clone());
+        let original_field_type = &field.typ;
+        let lifetime = format_ident!("this{}", index);
+        let field_type = replace_this_with_lifetime(quote! { #original_field_type }, lifetime.clone());
         if field.field_type == FieldType::Tail {
             mut_fields.push(quote! { #visibility #field_name: &'outer_borrow mut #field_type });
             mut_field_assignments.push(quote! { #field_name: &mut this.#field_name });
+            if uses_this_lifetime(quote! { #original_field_type }) {
+                lifetime_idents.push(lifetime.clone());
+            }
         } else if field.field_type == FieldType::Borrowed {
             let ass = quote! { #field_name: unsafe {
                 ::ouroboros::macro_help::change_lifetime(
@@ -39,6 +39,7 @@ pub fn make_with_all_mut_function(
             let lt = Lifetime::new(&format!("'{}", lifetime), Span::call_site());
             mut_fields.push(quote! { #visibility #field_name: &#lt #field_type });
             mut_field_assignments.push(ass);
+            lifetime_idents.push(lifetime.clone());
         } else if field.field_type == FieldType::BorrowedMut {
             // Add nothing because we cannot borrow something that has already been mutably
             // borrowed.
